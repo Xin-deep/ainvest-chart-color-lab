@@ -1,0 +1,1 @@
+Generated from the pinned source snapshot by scripts/build-vis.mjs. Upstream JSON is inlined and resolveSeriesColors gains an optional host palette bridge with ordered palette reuse for overflow data items. Data waterfall bars fit the available band and omit labels that do not fit. D3 7.9.0 and esbuild 0.25.9 are pinned build dependencies; the runtime bundle needs no network.

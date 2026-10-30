@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AAPL 财报分析 · 原尺寸对照</title>
+  <link rel="stylesheet" href="./styles.css">
+  <style>html,body{margin:0;padding:0;background:#fff}#financial-review{width:1600px;height:auto}.financial-page{margin:0}</style>
+</head>
+<body><main id="financial-review"></main>
+<script src="./vendor/vis-lab.bundle.js"></script>
+<script type="module">
+import { presets } from './data/presets.js';
+import { renderFinancialScene, applyFinancialPalette } from './scenes/financial.js';
+import { mountCompactBoard } from './scenes/custom.js';
+import { financialChartModules } from './data/financial-shared.js';
+const root = document.querySelector('#financial-review');
+const theme = new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light';
+root.innerHTML = renderFinancialScene();
+applyFinancialPalette(root, presets[0], theme);
+mountCompactBoard(root,{modules:financialChartModules,density:'compact',platform:'pc'},presets[0],theme,()=>{});
+</script></body></html>

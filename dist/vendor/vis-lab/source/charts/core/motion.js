@@ -1,0 +1,145 @@
+/*
+ * L1 · 动效（motion）。权威规范见 specs/motion.md。
+ * 与 label.js / axis-title.js / watermark.js 一致：本模块**不 import d3**、也**不 import frame.js**
+ * ——保证纯函数可被 node --test 直接加载；连逐帧循环也做到可测（rAF / 时钟经 opts 注入，
+ * 缺省才取全局），否则动画收尾是否精确落在终态就只能靠肉眼验收。
+ * 无 if(theme===…)：动效形态三主题一致，时长走 token（MOTION-02）、曲线是规范值常量（MOTION-03）。
+ * 本模块只提供「什么曲线、怎么逐帧推进」；**画什么由调用方的 draw(t) 决定**，
+ * 故柱 / 线 / 将来的饼环共用同一套驱动——时长统一（MOTION-02），无需按图表类型分派。
+ */
+
+/*
+ * [MOTION-03] 缓动 cubicOut = easeOutCubic = cubic-bezier(0.33, 1, 0.68, 1)（先快后慢、自然减速）。
+ * 系数是规范值常量而非 token：三主题同值、不参与主题分化（同 scale.js 的 Y_SPLIT_LINES 先例），
+ * 且 tokenNum 只解析单个数值、取不出四个系数。此处导出供跨端实现对齐口径（CSS / ECharts 写法见规范页）。
+ */
+export const EASE_GROW = Object.freeze([0.33, 1, 0.68, 1]);
+
+/* [MOTION-03] cubic-bezier(0.33, 1, 0.68, 1) 的等价闭式 */
+export function easeOutCubic(t) {
+  const c = Math.min(1, Math.max(0, t));
+  return 1 - (1 - c) ** 3;
+}
+
+/* [MOTION-07] 系统级「减弱动态效果」——无障碍底线，命中即直接终态、不提供绕过 */
+export function reducedMotion(view = globalThis) {
+  return !!view.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+}
+
+/*
+ * [MOTION-01] 逐帧推进一次生长：按 easeOutCubic 把进度 0→1 喂给 onFrame，返回 cancel。
+ *   duration  毫秒；≤ 0 或环境无 rAF（如 node）→ 同步落终态
+ *   onFrame   (t) => void，t 是**已缓动**的进度；调用方在这里重写几何属性
+ *   opts      { raf, cancel, now, onDone }，前三个缺省取全局（注入是为可测）
+ * 两条不变量（动画的正确性全靠它们）：
+ *   ① onFrame(1) 恰好被调用一次且必定是最后一次 —— 不能停在 0.98，终态必须逐像素精确；
+ *   ② cancel 后不再有任何回调 —— [MOTION-04] 被打断（如动画未完就拖缩放轴）立即落终态、不半途回退。
+ */
+export function runGrowth(duration, onFrame, opts = {}) {
+  const {
+    raf = globalThis.requestAnimationFrame,
+    cancel = globalThis.cancelAnimationFrame,
+    now = () => globalThis.performance?.now() ?? Date.now(),
+    onDone = () => {},
+  } = opts;
+
+  let settled = false;
+  const settle = () => {
+    if (settled) return;
+    settled = true;
+    onFrame(1);
+    onDone();
+  };
+
+  if (!(duration > 0) || typeof raf !== 'function') {
+    settle();
+    return () => {};
+  }
+
+  const t0 = now();
+  let id = raf(function step() {
+    if (settled) return;
+    const t = Math.min(1, (now() - t0) / duration);
+    if (t >= 1) return settle();
+    onFrame(easeOutCubic(t));
+    id = raf(step);
+  });
+
+  return () => {
+    if (settled) return;
+    if (typeof cancel === 'function') cancel(id);
+    settle();
+  };
+}
+
+/*
+ * [MOTION-08] 可冻结的补间驱动：给**播放 / 数据更新**用，与 runGrowth 并存。
+ *
+ * 与 runGrowth 同一条 cubicOut、同一套注入式时钟，**差别只在取消语义**——
+ * 而这条差别是契约本身，不能做成布尔开关：
+ *   runGrowth 的 cancel = 立即落终态（一次性入场被打断不该半途回退，MOTION-04）
+ *   runTween  的 pause  = **就地冻结当前帧**（需要「停在看到的那一帧」的场景用它）
+ * ⚠️ 不是每个播放都要冻结：消费方可以干脆不调 pause，让那一跳自然播完
+ *   （竞赛图即如此，见 specs/hbar.md HBAR-16）。本驱动器只提供能力，不规定用法。
+ * 把它做成 runGrowth 的一个参数，调用方就得看参数才知道被打断后画面停在哪；
+ * 而这正是 2026-08-26 桑基宁可在 L2 手写一份 rAF 也不用 runGrowth 的唯一理由
+ * （见 specs/sankey.md 待办）。两个具名函数、各一条契约。
+ *
+ *   duration  毫秒；≤ 0 或环境无 rAF → 同步落终态、resolve(true)
+ *   onFrame   (eased, linear) => void —— **两个进度都给**：linear 用于判 ===1 收尾
+ *             （eased 在 1 附近精度不可靠），eased 用于几何
+ *   opts      { delay, raf, cancel, now }
+ *             delay —— 起跑前的静默期（桑基的 120ms 文字提前量），期间不调 onFrame
+ * → { promise: Promise<boolean>, pause: () => void }
+ *     promise resolve(true)  跑完
+ *     promise resolve(false) 被 pause 冻结（**不是 reject**：暂停不是失败，
+ *                            调用方据此停止播放循环而不回滚业务状态）
+ * 两条不变量：
+ *   ① onFrame 的最后一次调用恒为 (1, 1) 且恰一次；
+ *   ② pause() 后不再有任何回调，**且不补终帧**。
+ */
+export function runTween(duration, onFrame, opts = {}) {
+  const {
+    delay = 0,
+    raf = globalThis.requestAnimationFrame,
+    cancel = globalThis.cancelAnimationFrame,
+    now = () => globalThis.performance?.now() ?? Date.now(),
+  } = opts;
+
+  let done = false;
+  let id = 0;
+  let resolveWith = () => {};
+  const promise = new Promise((resolve) => { resolveWith = resolve; });
+
+  const finish = (completed) => {
+    if (done) return;
+    done = true;
+    if (completed) onFrame(1, 1);
+    resolveWith(completed);
+  };
+
+  if (!(duration > 0) || typeof raf !== 'function') {
+    finish(true);
+    return { promise, pause: () => {} };
+  }
+
+  const startAt = now() + Math.max(0, delay);
+  id = raf(function step() {
+    if (done) return;
+    const at = now();
+    if (at < startAt) { id = raf(step); return; }        /* delay 期间空转，不调 onFrame */
+    const linear = Math.min(1, (at - startAt) / duration);
+    if (linear >= 1) { finish(true); return; }
+    onFrame(easeOutCubic(linear), linear);
+    id = raf(step);
+  });
+
+  return {
+    promise,
+    pause: () => {
+      if (done) return;
+      if (typeof cancel === 'function') cancel(id);
+      finish(false);                                      /* 注意：不补终帧 */
+    },
+  };
+}
