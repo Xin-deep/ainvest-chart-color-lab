@@ -1,0 +1,54 @@
+# Charts Core
+
+`charts/core/` 存放可复用的图表基础构件、计算逻辑和主题行为解析能力。
+
+## 构件清单
+
+规则的**权威定义在 `specs/*.md`**，本表只说「哪个文件干什么」，不复述规则。
+
+> **本表里的每一个模块，每个 L2 图型都必须交代用不用**——见各族 `charts/charts/<名>/README.md`
+> 的「L1 复用声明」，由 `hooks/lint-l1-declaration.mjs` 校验并与代码里的 import 逐条对账。
+> 故**在此新增或改名一个模块，会让所有 L2 的声明变红**，需同步补一行；这是本表已知的维护成本，
+> 为换取「悄悄不用一个 L1」拦得住而接受（同 `AGENTS.md` L1 能力索引那处的取舍）。
+
+| 文件 | 职责 | 权威规范 |
+|---|---|---|
+| `frame.js` | 绘制区几何与 SVG 骨架、容器自适应（`observeResize` 供各图型统一复用；`xBand:false` 即无轴画布，`xBandLines` 声明多行 X 轴带，`minGridHeight:0` 关掉轴图的最小高兜底，供饼环用）。另导出 **`containerDrivesHeight()` / `containerTookOver()`**——「容器高够不够用」与「这次变高是不是外部造成的」两条判据，**全库唯一出处**（曾三族各写一份、treemap 用 `> 0` 而另两族 `>= 40`）；基线由调用方给，那里有个逐帧坍缩的坑，见模块注释。另导出 `verticalGeometry()`：上下留白与绘图区高度的**纯计算**，与刻度无关故可在算刻度前先问出来（LABEL-10 的呼吸位需要它），`createFrame` 内部也调它、公式只此一份 | axes.md（AXIS-01/04、GRID-03）、pie.md（PIE-02/PIE-08）、data-label.md（LABEL-10）、sankey.md（SANKEY-23）、waterfall.md（WATERFALL-11/12） |
+| `split.js` | **刻度三件套的纯数学**（min/max/interval、0 恒落线、占比最大化、双轴共享分割线）。零依赖，故可被 node 加载、有单测 | axes.md（SCALE-01/03/04） |
+| `scale.js` | 值 → 像素的比例尺（`linearY` / `bandX`，依赖 d3）。**刻度数学不在这里**——见 `split.js`，拆开只为可测 | axes.md（SCALE-02） |
+| `grid.js` | 网格线与 0 轴基线；`showXSplit` 走竖向分割线（横向条系用它当读数参照系） | axes.md（GRID-01/02）、hbar.md（HBAR-21） |
+| `axis.js` | X / Y 轴标签、列宽与碰撞；`wrapAxisLabel` 按真实测量结果做通用两行折行，`axisLabelLines` / `renderAxisLabelLines` 是常态 X 标签与高亮贴片共用的逐行内容结构；多行标签按每一行最终类名测量，以最宽行参与碰撞 | axes.md（AXIS-01..08）、tooltip.md（TOOLTIP-09） |
+| `axis-title.js` | 轴标题带高、锚点与同带内让位（默认不显示） | axis-title.md（AXISTITLE-01..06） |
+| `measure.js` | 文本测量，全库唯一测量源（零 import，可被 node 加载）。`measureTexts` 批量量宽，`createTextMeasurer` 支持反复拟合字号；两者走隐藏 SVG + 真实类名。`measureTexts` 可按行接收类名函数，避免多行异字重被当成同一字体；`measureInk` 量**墨迹上下边**，走 Canvas（字体仍从 `getComputedStyle` 读，不猜） | axes.md（AXIS-01 / AXIS-08）、treemap.md（TREEMAP-05）、sankey.md（SANKEY-18） |
+| `bar-geometry.js` | 柱系纯几何（零 import，可被 node 加载）：`groupedBars` / `singleBar` / `stackBars` 的 band 排布与堆叠累计（原 `cartesian/layout.js`，因横向条成为第二个消费者而下沉）+ `barPath` / `barRadius` 的单根柱路径与圆角分档（原 `mark.js` 私有，因那边 import d3 而永远不能单测）。`barPath` 四档方向：竖柱 `top`/`bottom` · 横条 `right`/`left`，圆角夹取按方向换轴 | bar.md（BAR-01/02/03/05/06）、hbar.md（HBAR-02/03） |
+| `mark.js` | 柱 / 线 / 数据点的图元渲染（返回逐帧重绘闭包供生长动效驱动）；路径与圆角取自 `bar-geometry.js` | bar.md、line.md、motion.md |
+| `motion.js` | 缓动曲线、减弱动效判断与逐帧生长循环（零 DOM，rAF / 时钟可注入）；桑基季度播放复用曲线与减弱动效判断，保留专属暂停时序 | motion.md（MOTION-01..07）、sankey.md（SANKEY-24） |
+| `label.js` | 数据标签渲染、批量省略、三档前景色（跟随系列色 / 按底色反色 / 中性）与碰撞过滤。`truncateBatch` 的测量回调可同时收到源条目，支持桑基同批标题按各自字号测量；`dropCollisions` 收 `{start,size}`，**两个方向共用**：柱线判行、饼环外侧标签判列 | data-label.md（LABEL-01..09）、pie.md（PIE-16）、sankey.md（SANKEY-15） |
+| `legend.js` | 图例渲染与显隐 / 弱化事件；排布方向可参数化（横排换行 / 纵向单列） | legend.md（LEGEND-01/10/11） |
+| `legend-state.js` | 图例点击的状态迁移：`applyToggle`（筛，改 hidden）/ `applyFocus`（强调，改 selected）。**与 legend.js 分开只为一件事**——那边 import d3，住在里面就一行测不了 | legend.md（LEGEND-06/12/14） |
+| `highlight-state.js` | 图元 hover / 钉住的状态迁移（零 import，可被 node 加载）：`applyHover` / `applyLeave` / `applyPick` / `applyClear` + `activeTarget`。**钉位只有一个**，跨类互斥由类型保证；只认 `{kind, key}`，邻域怎么算、class 怎么贴、出不出看板都留在 L2 | sankey.md（SANKEY-10/20）、treemap.md（TREEMAP-06） |
+| `tooltip.js` · `crosshair.js` | 浮层气泡、**X / Y 两向**指示线与轴高亮贴片（X 贴片只负责状态背景、边界钳制与指示关系，文字直接复用 `axis.js` 的逐行结构、`.dv-axis-label` 基础样式及常态轴标签坐标；气泡标题可带实体图标，详情行可隐藏 marker；每行接收调用方已经完整格式化的单一 value；**三个位置档的 clamp 边界由本模块按档自取**，`place()` 不收容器尺寸；气泡宽度受内容 / 视口 / 容器三道封顶，容器封顶的比例走 token、由 `place()` 在读宽度前写入，「容器」= 图表根 `.dv-chart`、缺省回落到宿主（与 follow 档 clamp 边界同一个定义），见 TOOLTIP-01；Y 向横线 + Y 值徽标默认关，见 TOOLTIP-12） | tooltip.md（TOOLTIP-01/12）、waterfall.md（WATERFALL-08/13） |
+| `image-content.js` | 可选图片内容的标准化、尺寸档降级、SVG 结构和 Tooltip 内容转换；不识别图表、主题或业务字段 | image-content.md（IMAGECONTENT-01..04） |
+| `datazoom.js` | 缩放轴轨道 / 手柄与窗口事件 | datazoom.md |
+| `watermark.js` · `watermark-assets.js` | 品牌水印（资源为生成物，勿手改） | watermark.md |
+| `callout.js` | 图表标注：强调环 + 定宽折行的多行文字 + 三次贝塞尔引线与手写箭头，**位置自动选**（8 方位 × 近/远两档，压住图元 / 越界 / 互撞逐条打分，选不出即整条丢弃）。不 import d3，几何全部导出可单测；只认像素锚点与矩形，**锚点解析留 L2** | callout.md（CALLOUT-01..16） |
+| `polar-label.js` | 绕圆标签几何（零 import，可被 node 加载）：`pointAt`（**全库唯一三角公式**）· `labelAnchor`（八向对齐）· `labelArc`（可读弧线，下半圆自动反向）· `labelBand`（图元占位后标签带吃剩余并封顶）。由 specs/radar.md 的下沉点②③命中而建 | radar.md（RADAR-07/09/14）、pie.md（PIE-13） |
+| `palette.js` | 系列取色器 | color.md |
+| `visual-color.js` | 数据项的系列、强度与有符号语义取色，以及低表现→高表现的通用色阶；不识别图表、主题或业务字段 | color.md（COLOR-06/09/10） |
+| `format.js` | 数值格式化 | format.md |
+| `chart-text.js` | 组件固定文案（零 import，可被 node 加载）：`resolveChartText` 取 L2 缺省表或调用方的**整套**替换（缺键 / 多键当场抛错），`fillText` 填 `{key}` 模板。不认识语言或品牌——Ainvest 英文表由 L3 注入 | chart-text.md（CHARTTEXT-01..03） |
+| `theme.js` | 主题行为解析（behavior.json → 参数）；同元素 `data-density` 叠加密度覆盖层的形态段（`densityOf` / `densitiesOf`，合并规则在 `tokens/density.mjs`） | WORKFLOW 第六节、tokens/README「密度覆盖层」 |
+| `tokens.js` | 从计算样式读取 CSS 自定义属性 | — |
+
+## 边界
+
+- 本目录放置可复用的生产逻辑，不放具体 Preview 页面和演示数据（示例数据在 `demos/`）。
+- 组件结构样式集中在 `charts/styles.css`。
+- 颜色、字号、间距和尺寸等主题值来自 `tokens/` 生成的 CSS 变量。
+- 参与几何计算或逻辑分支的主题差异来自 `tokens/behavior.json`。
+- Core 组件不应硬编码具体主题判断；主题配置应先解析为参数，再传给组件。
+- Playground 中出现可复用的计算或渲染逻辑时，应回收到本目录。
+
+## 设计原则
+
+Core 构件应尽量保持纯函数、参数化和幂等渲染。同一份组件实现需要支持不同主题、端和颜色模式，而不是复制多套主题组件。

@@ -1,0 +1,106 @@
+{
+  "$meta": {
+    "description": "主题形态/行为矩阵。值 token 走 CSS 变量（tokens/<theme>.json），形态/行为走本文件、由 JS 逻辑消费；两条通道共用容器上的 data-theme 开关。",
+    "authority": "权威表述在规范文档（specs/axes.md 及原体系 themes/*.md），本文件为其可执行派生",
+    "value-forms": {
+      "字符串/布尔": "所有端同值",
+      "{mobile, pc}": "端分叉"
+    },
+    "keys": {
+      "y-label-form": "[AXIS-01] Y 轴标签布局：inside = 网格内部 / outside = 网格外部",
+      "y-main-side": "[AXIS-02] 主 Y 轴位置：left / right（副 Y 取相反侧）",
+      "y-dual-shared": "[AXIS-02] 未声明副轴时在反侧镜像主轴标签（iFinD-PC 特性，已实现）；真双量纲仍在两侧显示各自刻度",
+      "x-collision": "[AXIS-06] X 轴标签碰撞策略：segment3 / hide",
+      "number-format": "[FORMAT-01] 数值显示格式：system = cn（万/千万/亿/兆）/ en（K/M/B/T）/ plain（千分位）；max-decimals 最多小数位；min-abbr 缩写起始阈值（en）",
+      "legend-marker": "[LEGEND-03] 图例标记本体形态。mode=by-type（按图表类型分形，shapes 为 type→{shape,w,h,r} 映射，default 兜底）/ unified（全类型统一，直接给 {shape,w,h}）。shape：rect 方块 / line 横粗线 / dot 实心圆 / box 描边方 / split 左右两色（涨跌固定色）。尺寸单位 px、居中于 size-legend-marker 容器",
+      "tooltip-position": "[TOOLTIP-04..07] 气泡位置档：follow = 跟随式（默认鼠标右下、容器碰撞才左翻躲避）/ top-anchor = 顶部锚定式（贴 grid 上沿 + 下三角、水平跟随）/ side-fixed = 两侧固定式（固定上方左右对侧切换）。无坐标系图 → follow 特例随饼环切片消费",
+      "y-label-align": "[AXIS-03] Y 轴标签水平对齐：auto = 贴轴线一侧随位置自动 / right = 全部右对齐（Ainvest 特例；只影响 outside 右列——inside 右侧与 outside 左列本就右对齐）",
+      "line-point-shape": "[LINE-01] 折线数据点形状：circle = 实心圆 / diamond = 正方形旋转 45°（iFinD 特例）。尺寸走值 token size-line-point（含描边）",
+      "datazoom-align": "[DATAZOOM-02] 缩放轴滑块对齐：center = 手柄中心贴窗口边界（THS/iFinD）/ edge = 手柄内缘贴边界（Ainvest）",
+      "datazoom-data-shadow": "[DATAZOOM-04] 轨道内是否画数据迷你阴影：true = 双色（未选 datazoom-data-bg / 选中 datazoom-data-select，THS/iFinD）/ false = 纯轨道仅 A 背景 + C 选区（Ainvest showDataShadow:false）",
+      "datazoom-handle": "[DATAZOOM-03] 缩放轴手柄形态（代码现画，非 SVG 资源，见 specs/datazoom.md）：shape=rect/circle · w/h 尺寸(px) · r 圆角(rect，缺省走 radius-slider-handle) · grip={n 竖条根数, h 竖条高 px, gap 中心间距 px}（竖条粗细 1.5 为结构常量、色走 color-datazoom-handle-grip；描边宽走 size-slider-handle-border、色走 -handle-border）。THS 24×24 圆角方(3 竖纹)、iFinD 16×16 圆角方(品牌填充, 1 竖纹)、Ainvest 32 圆(白面, 3 竖纹)。尺寸参与缩放带高度计算",
+      "datazoom-label": "[DATAZOOM-05] 是否在手柄两侧显示起/终类目提示文本：仅 iFinD-PC 显示；THS / Ainvest 不显示。移动端一律不显示（与端无关的主题开关，端由组件另判）",
+      "pie-label-form": "[PIE-15] 饼环外侧标签的名称段与数值段如何排布：inline = 同一行「名称 数值」（前提是两段字号相同，THS / iFinD-PC）/ stacked = 名称在上、数值在下两行（Ainvest，两段字号不同）。**是形态不是数值**：它改变标签块的高与宽（stacked 块高 = 两行行高之和、块宽 = 两段取大者；inline 反之），直接参与 PIE-14 纵向碰撞区间与 PIE-02 画布半高的计算，故走本文件而非值 token。⚠️ inline 档要求两段字号相同——异字号必须用 stacked，否则同一行内混排会让单一 class 的测量系统性偏窄",
+      "treemap-profile": "[TREEMAP-17/18][COLOR-09] 矩形树图主题形态：color-mode=config/series/semantic-binned；content=text/image。三主题共用单画布面积布局，字段映射与 semantic-binned 分档阈值由数据层提供，Tooltip 骨架与对侧固定布局也保持一致。像素值和完整梯度色仍由主题 token 提供。",
+      "waterfall-profile": "[WATERFALL-10] 瀑布图主题默认色彩模式：default-color-mode=primary/semantic。三主题增减项统一使用浅底箭头形态，形态属于 L2 通则，不在主题行为中分叉；主题只通过 currentColor 与值 token 提供各自颜色。",
+      "watermark": "[WATERMARK-01..05] 图表水印品牌 logo：asset=资源 id（ths / ainvest，iFinD-PC 复用 ths）· anchor=锚角 {top|bottom}-{left|right}（贴 grid 绘图区角）· offset=距对应 grid 物理边净距(px)。真实 SVG 直载（明暗各一份、色烘焙在 SVG 内、不走 token 链路），资源见 charts/core/watermark-assets.js（源 assets/watermarks/*.svg）。平台通用——无 mobile/pc 分叉，unfold 原样透传"
+    }
+  },
+
+  "ths": {
+    "pie-label-form": "inline",
+    "treemap-profile": { "color-mode": "config", "content": "text" },
+    "waterfall-profile": { "default-color-mode": "semantic" },
+    "y-label-form": "inside",
+    "y-main-side": "left",
+    "y-dual-shared": false,
+    "x-collision": "segment3",
+    "number-format": { "system": "cn", "max-decimals": 2 },
+    "legend-marker": {
+      "mode": "by-type",
+      "shapes": {
+        "bar": { "shape": "rect", "w": 6, "h": 6, "r": 1 },
+        "line": { "shape": "line", "w": 8, "h": 2, "r": 1 },
+        "dot": { "shape": "dot", "w": 6, "h": 6 },
+        "candle": { "shape": "line", "w": 8, "h": 2, "r": 1 },
+        "boxplot": { "shape": "box", "w": 12, "h": 12 },
+        "redgreen": { "shape": "split", "w": 12, "h": 6 },
+        "default": { "shape": "rect", "w": 6, "h": 6, "r": 1 }
+      }
+    },
+    "tooltip-position": "side-fixed",
+    "y-label-align": "auto",
+    "line-point-shape": "circle",
+    "datazoom-align": "center",
+    "datazoom-data-shadow": true,
+    "datazoom-handle": { "shape": "rect", "w": 24, "h": 24, "r": 6, "grip": { "n": 3, "h": 8, "gap": 4 } },
+    "datazoom-label": false,
+    "watermark": { "asset": "ths", "anchor": "bottom-right", "offset": { "right": 36, "bottom": 24 } }
+  },
+  "ifind-pc": {
+    "pie-label-form": "inline",
+    "treemap-profile": { "color-mode": "series", "content": "text" },
+    "waterfall-profile": { "default-color-mode": "semantic" },
+    "y-label-form": "outside",
+    "y-main-side": "left",
+    "y-dual-shared": true,
+    "x-collision": "hide",
+    "number-format": { "system": "cn", "max-decimals": 2 },
+    "legend-marker": {
+      "mode": "by-type",
+      "shapes": {
+        "line": { "shape": "line", "w": 12, "h": 3, "r": 1.5 },
+        "bar": { "shape": "rect", "w": 12, "h": 12, "r": 2 },
+        "dot": { "shape": "dot", "w": 8, "h": 8 },
+        "default": { "shape": "rect", "w": 12, "h": 12, "r": 2 }
+      }
+    },
+    "tooltip-position": "follow",
+    "y-label-align": "auto",
+    "line-point-shape": "diamond",
+    "datazoom-align": "center",
+    "datazoom-data-shadow": true,
+    "datazoom-handle": { "shape": "rect", "w": 16, "h": 16, "r": 6, "grip": { "n": 1, "h": 8, "gap": 4 } },
+    "datazoom-label": true,
+    "watermark": { "asset": "ths", "anchor": "bottom-right", "offset": { "right": 36, "bottom": 24 } }
+  },
+  "ainvest": {
+    "pie-label-form": "stacked",
+    "treemap-profile": { "color-mode": "semantic-binned", "content": "image" },
+    "waterfall-profile": { "default-color-mode": "primary" },
+    "y-label-form": { "mobile": "inside", "pc": "outside" },
+    "y-main-side": "right",
+    "y-dual-shared": false,
+    "x-collision": "segment3",
+    "number-format": { "system": "en", "max-decimals": 1, "min-abbr": 10000 },
+    "legend-marker": { "mode": "unified", "shape": "dot", "w": 10, "h": 10 },
+    "tooltip-position": "top-anchor",
+    "y-label-align": "right",
+    "line-point-shape": "circle",
+    "datazoom-align": "edge",
+    "datazoom-data-shadow": false,
+    "datazoom-handle": { "shape": "circle", "w": 32, "h": 32, "grip": { "n": 3, "h": 10, "gap": 5 } },
+    "datazoom-label": false,
+    "watermark": { "asset": "ainvest", "anchor": "bottom-left", "offset": { "left": 4, "bottom": 2 } }
+  }
+}
