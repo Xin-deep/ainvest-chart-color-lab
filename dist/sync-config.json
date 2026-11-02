@@ -1,3 +1,6 @@
 {
+  "provider": "supabase",
+  "url": "",
+  "publishableKey": "",
   "apiBase": ""
 }

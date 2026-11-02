@@ -1,6 +1,6 @@
 # Palette Lab · Ainvest 配色实验台
 
-版本：0.12.0。「自由看板」提供统一的少量 / 大量数据对比模板（25 种图表、50 个模块），覆盖 Vis Lab 全部 25 种公开图表样式；原看板在「自由布局」中保留。支持模块排序、隐藏恢复和 1–5 列布局，两种布局独立保存。
+版本：0.13.0。「自由看板」提供统一的少量 / 大量数据对比模板（25 种图表、50 个模块），覆盖 Vis Lab 全部 25 种公开图表样式；原看板在「自由布局」中保留。支持模块排序、隐藏恢复和 1–5 列布局，两种布局独立保存。
 
 可直接用浏览器打开 `preview.html`，无需安装环境。现有预览、HSB 和 HEX 调色支持离线；新增 Color.js OKLCH 选色器首次加载需要联网。此文件由源码生成，修改后执行 `npm run build:preview` 更新。普通方案自动保存在当前浏览器；固定只读方案通过同步服务跨设备更新，本次提供本地演示。
 
@@ -9,6 +9,12 @@
 仓库内已提供 `.github/workflows/pages.yml`。将代码推送到 `main`，并在仓库 **Settings → Pages → Source** 选择 **GitHub Actions** 后，会验证代码并将 `dist/` 发布为完整交互网页。后续推送自动更新。
 
 页面和资源均使用相对路径，支持 GitHub Pages 的仓库子路径。财报分析、Aime 对话、自由看板及色板导入、调整等操作直接在浏览器运行，无需后端；各使用者的方案保存在自己的浏览器中。OKLCH 第三方选择器需要联网，加载失败时保留 HSB / HEX 调色。
+
+## Supabase 云端同步
+
+已准备 Supabase 适配器、数据库初始化 SQL 与权限测试。按 [Supabase 接入步骤](supabase/SETUP.md) 创建免费项目，执行初始化脚本、开启 Anonymous Sign-Ins，再填入 `dist/sync-config.json` 的 Project URL 和 Publishable Key，即可继续使用 GitHub Pages，无需 Node 云服务器。配置尚未填写时，本地保留 Node 演示，线上不会假装已经连接云端。
+
+数据库使用 RLS 限定查看范围；编辑凭证单独哈希存储在私有表，Realtime 只订阅当前方案的可读数据。公开 Key 无法枚举所有方案或直接写表。云端固定链接需要重新创建，旧本地链接不会自动迁移。
 
 ## Aime 手机预览
 
@@ -33,9 +39,9 @@
 
 分享弹窗的「分享静态快照」继续可在 GitHub Pages 使用。快照携带 A/B 色板、主题、Aime 模块及全局样式，后续修改需要重新生成。大型方案可使用原有完整实验 JSON 导出与导入。离线 preview.html 继续支持本地调色，但不能创建实时链接。
 
-### 后续线上接入
+### 可选：继续部署 Node 同步服务（非 Supabase 路线）
 
-GitHub Pages 不运行 Node 服务。本次只做本地演示，`dist/sync-config.json` 的 `apiBase` 保持空值，尚未部署后端或更改线上网站。
+优先使用上面的 Supabase 路线。以下保留 Node 自托管方式；GitHub Pages 本身不运行 Node。`apiBase` 仅用于此路线，不与 Supabase 配置同时填写。
 
 已有 HTTPS Node 服务后，以 `node scripts/serve.mjs` 启动，配置这些环境变量：
 
@@ -46,13 +52,13 @@ GitHub Pages 不运行 Node 服务。本次只做本地演示，`dist/sync-confi
 | `SYNC_DATA_DIR` | 持久化磁盘上的绝对数据目录，不能用临时文件系统 |
 | `ALLOWED_ORIGINS` | 允许的前端 origin，如 `https://xin-deep.github.io`，多个用英文逗号分隔 |
 
-将 `dist/sync-config.json` 的 `apiBase` 设置为同步服务的 HTTPS origin（不含 `/api`、查询或片段），再发布 Pages。后端需要保留 SSE 长连接；代理不要缓冲 `/api/sessions/:id/events`。单进程文件存储适合小规模试用；多实例部署需要共享数据库及推送通道，本演示尚未实现。线上配额、账号和链接撤销应在正式运营前另行设计。
+将 `dist/sync-config.json` 的 `provider` 改为 `node`，并将 `apiBase` 设置为同步服务的 HTTPS origin（不含 `/api`、查询或片段），再发布 Pages。后端需要保留 SSE 长连接；代理不要缓冲 `/api/sessions/:id/events`。单进程文件存储适合小规模试用；多实例部署需要共享数据库及推送通道，本演示尚未实现。线上配额、账号和链接撤销应在正式运营前另行设计。
 
 首次发布：必须先将源码展开到仓库根目录，确保 `.github/workflows/pages.yml` 和 `dist/index.html` 是实际仓库文件，而非仅存在于 ZIP 中。仓库管理员在 Settings → Pages 将 Source 设为 GitHub Actions 后，将代码合并到 main；Actions 成功后显示在线地址。未开启 Pages 时，代码验证仍可运行，但发布会失败并提示管理员配置 Pages。
 
 ## 本地运行
 
-需要 Node.js 18+，没有依赖安装步骤。
+需要 Node.js 18+，本地运行不需要安装依赖；运行完整测试或重建 SDK 前需先执行 `npm ci`。
 
 ```sh
 npm run dev

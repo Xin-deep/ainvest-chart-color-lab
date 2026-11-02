@@ -96,8 +96,8 @@ test('write credentials are browser-local, and production never falls back to an
   const owner = storage(), viewer = storage();
   saveOwner(owner, 'https://sync.example', 'abc', token);
   assert.equal(readOwner(owner, 'https://sync.example', 'abc'), token); assert.equal(readOwner(viewer, 'https://sync.example', 'abc'), null);
-  assert.equal(await discoverSyncBase(new URL('http://127.0.0.1:4317/aime.html')), 'http://127.0.0.1:4317');
+  assert.equal(await discoverSyncBase(new URL('http://127.0.0.1:4317/aime.html'), async () => ({ ok: false })), 'http://127.0.0.1:4317');
   const location = new URL('https://xin-deep.github.io/lab/aime.html');
-  await assert.rejects(discoverSyncBase(location, async () => ({ ok: true, json: async () => ({ apiBase: '' }) })), /尚未启用/);
+  await assert.rejects(discoverSyncBase(location, async () => ({ ok: true, json: async () => ({ apiBase: '' }) })), /尚未配置/);
   await assert.rejects(discoverSyncBase(location, async () => ({ ok: true, json: async () => ({ apiBase: 'http://sync.example' }) })), /HTTPS/);
 });

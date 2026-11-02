@@ -2322,33 +2322,121 @@
 ${Xp}
 :host{display:block}*{box-sizing:border-box}.chart-host{width:100%;font-family:var(--font-family-cn);color:var(--color-text-primary)}.palette-chart-summary{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;pointer-events:none;line-height:1.45;color:var(--color-text-primary);white-space:nowrap}.palette-chart-summary span{font-size:10px;color:var(--color-text-secondary)}.palette-chart-summary strong{font-size:12px;font-weight:600}svg{flex-shrink:0}.dv-chart__plot{min-width:0}.chart-host.row-fill{flex:1;min-height:0}.chart-host[data-preset="financial-business"].dv-chart--legend-bottom,.chart-host[data-preset="financial-region"].dv-chart--legend-bottom,.chart-host[data-preset="aime-factors"].dv-chart--legend-bottom{flex-direction:column-reverse}.chart-host[data-preset="aime-growth"] .dv-line-point{opacity:0}`,B1=Wp("index").map(e=>{let t=Ei(e),r=Cs(e);return e.id==="treemap-entry"&&(r.max=8),e.chart==="pie"&&(r.max=12),{id:e.id,name:e.title,group:e.group,chart:e.chart,count:ln(e),legacyCounts:e.chart==="cartesian"?[22,e.id==="grouped3"?16:e.id==="line-multi"?36:22]:e.chart==="pie"?[7]:[ki(e).many],series:e.indexSeriesRange?.default||1,seriesRange:e.indexSeriesRange||null,range:r,labels:!!(t.dataLabel||t.labelLayout),fixed:!t.density,summary:e.summary||"",height:"auto",span:e.chart==="sankey"?"full":"auto"}}),Si;function I1(e,t,r,a,n,i="compact",o="pc"){e.hasAttribute("data-row-fill")&&(delete e.dataset.rowFill,e.style.removeProperty("min-height"));let s=e.shadowRoot||e.attachShadow({mode:"open"});if(s.replaceChildren(),"adoptedStyleSheets"in s)Si||=new CSSStyleSheet,Si.cssRules.length||Si.replaceSync(qp),s.adoptedStyleSheets=[Si];else{let x=document.createElement("style");x.textContent=qp,s.append(x)}let l=document.createElement("div");l.className="chart-host",Object.assign(l.dataset,{theme:"ainvest",density:i==="standard"?"standard":"compact",platform:o==="mobile"?"mobile":"pc",mode:a,preset:t.fixture||""}),t.height!=="auto"&&(l.style.height=`${t.height}px`),l.style.minWidth="0",l.__paletteLabWaterfallWidth=zs;let c=r.themes[a];l.__paletteLabColors=c.categorical.map(x=>x.hex),l.__paletteLabNeutral=c.surface[3].hex,t.colorSlots&&(l.__paletteLabColors=t.colorSlots.map(x=>c.categorical[x]?.hex||l.__paletteLabNeutral)),t.fixture==="aime-duration"&&(l.__paletteLabColors=Array(12).fill(c.categorical[0].hex)),l.__paletteLabResolveColor=x=>Ls(l.__paletteLabColors,x,l.__paletteLabNeutral);for(let[x,L]of[[1,["--color-background-layer1"]],[2,["--color-text-primary"]],[3,["--color-text-secondary","--color-text-axis","--color-text-legend"]],[4,["--color-visualization-divider-deep"]],[5,["--color-visualization-divider"]]])if(c.surface[x].hex!==Ps[a][x])for(let T of L)l.style.setProperty(T,c.surface[x].hex);for(let[x,L]of Object.entries({"--color-sankey-income":c.categorical[0].hex,"--color-sankey-profit":c.semantic[0].hex,"--color-sankey-expense":c.semantic[1].hex,"--color-price-up":c.semantic[0].hex,"--color-price-down":c.semantic[1].hex}))l.style.setProperty(x,L);t.fixture==="aime-growth"&&(l.__paletteLabFormat=x=>x==null?"\u2014":`${Math.round(x*100)}%`),["financial-trend","financial-payout"].includes(t.fixture)&&(l.__paletteLabFormat=x=>x!==0&&Math.abs(x)<2?un(x):new Intl.NumberFormat("en-US",{maximumFractionDigits:2}).format(x/1e9)+(x===0?"":"B"),l.__paletteLabSecondaryFormat=un),["financial-business","financial-region","financial-breakdown"].includes(t.fixture)&&(l.__paletteLabFormat=x=>`${Number((x/1e9).toFixed(2))}B`),t.fixture==="financial-yield"&&(l.__paletteLabFormat=un),Ds(l,t),s.append(l);let d=ks.find(x=>x.id===t.type);if(!d)throw new Error(`\u672A\u63A5\u5165\u56FE\u8868\uFF1A${t.type}`);let p=e.closest(".compact-grid")&&["cartesian","hbar","waterfall"].includes(d.chart),u=d.cfg,h={...d,cfg:x=>u(x,t.series)},f=Es(h,{theme:"ainvest",platform:o==="mobile"?"mobile":"pc",density:t.count,dataLabel:t.labels,animation:!1,legend:d.chart==="pie"&&t.labels==="on"?"bottom":"right",labelLayout:d.chart==="pie"&&t.labels==="on"?"outside":"off",legendSelect:"multi",radarEditable:"off"});f=Ns(f,t);let m=Bs(t)||_s(t);m&&Object.assign(f,m),f=Rs(f,t);let g=jp[d.chart](l,f);p&&(e.style.minHeight=`${l.getBoundingClientRect().height}px`,e.dataset.rowFill="",l.classList.add("row-fill"));let v=Fs(l,t,a),w=t.summary||(t.fixture==="aime-factors"?{label:"Total",value:(f.items.reduce((x,L)=>x+L.value,0)/1e6).toFixed(2)+"M"}:null),S;if(w&&d.chart==="pie"){let x=l.querySelector(".dv-chart__plot"),L=document.createElement("div");L.className="palette-chart-summary";let T=document.createElement("span"),z=document.createElement("strong");T.textContent=w.label,z.textContent=w.value,L.append(T,z);let H=()=>{x.contains(L)||x.append(L)};H(),S=new MutationObserver(H),S.observe(x,{childList:!0})}let b=(f.items||f.series||f.entities||f.root?.children||[]).map(x=>typeof x=="string"?x:x.name);return l.addEventListener("dblclick",x=>{let L=x.target.closest("[data-key]");if(L){let T=b.indexOf(L.dataset.key),z=d.chart==="treemap"?0:T,H=t.fixture==="aime-duration"?0:Ts(z,t.colorSlots,c.categorical.length);H>=0&&H<c.categorical.length&&n(H)}}),{destroy(){v.destroy(),S?.disconnect(),g.destroy(),s.replaceChildren()}}}return tf(_1);})();
 </script>
-    <script type="module">// The read URL contains a random session ID. Only the creator's browser holds the write capability.
+    <script type="module">// Supabase owns persistence/auth/Realtime; private SQL functions check capabilities and revisions.
+function createSupabaseLiveClient(config, { sdkLoader = () => import(new URL('../vendor/supabase.bundle.js', import.meta.url)), setIntervalFn = setInterval, clearIntervalFn = clearInterval } = {}) {
+  let initialization;
+  const ready = () => initialization ||= (async () => {
+    const { createClient } = await sdkLoader();
+    const client = createClient(config.url, config.publishableKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+    const current = await client.auth.getSession();
+    if (current.error) throw current.error;
+    if (!current.data.session) {
+      const signed = await client.auth.signInAnonymously();
+      if (signed.error) throw new Error('无法建立 Supabase 会话，请确认已开启 Anonymous Sign-Ins：' + signed.error.message);
+    }
+    return client;
+  })().catch(error => { initialization = null; throw error; });
+  const rpc = async (name, params) => {
+    const client = await ready();
+    const { data, error } = await client.rpc(name, params);
+    if (error) {
+      const status = /^PT\d{3}$/.test(error.code || '') ? Number(error.code.slice(2)) : error.code === '42501' ? 403 : error.code === 'PGRST202' ? 503 : 500;
+      const failure = new Error(error.code === 'PGRST202' ? 'Supabase 数据库脚本尚未执行，请先完成初始化' : error.message || 'Supabase 暂不可用');
+      failure.status = status; throw failure;
+    }
+    if (!data || typeof data.id !== 'string' || !Number.isSafeInteger(data.revision) || !data.snapshot) throw new Error('Supabase 返回了无效的方案');
+    return data;
+  };
+  const adapter = {
+    create: (snapshot, token) => rpc('aime_create_live', { p_snapshot: snapshot, p_edit_token: token }),
+    get: id => rpc('aime_join_live', { p_id: id }),
+    update: (id, token, revision, snapshot) => rpc('aime_update_live', { p_id: id, p_edit_token: token, p_revision: revision, p_snapshot: snapshot }),
+    subscribe(id, onSnapshot, onStatus) {
+      let stopped = false, client, channel, timer, reading = false, connected = false;
+      let lastRevision = 0;
+      const deliver = record => { if (!stopped && record.revision > lastRevision) { onSnapshot(record); lastRevision = record.revision; } };
+      const refresh = async () => {
+        if (stopped || reading) return;
+        reading = true;
+        try { deliver(await adapter.get(id)); if (!stopped && !connected) onStatus('实时连接恢复中 · 自动检查更新'); }
+        catch { if (!stopped) onStatus('连接中断，正在重试'); }
+        finally { reading = false; }
+      };
+      (async () => {
+        client = await ready();
+        // Join first so SELECT RLS and Realtime both authorize exactly this session.
+        deliver(await adapter.get(id));
+        if (stopped) return;
+        channel = client.channel('aime-live:' + id + ':' + crypto.randomUUID());
+        channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'aime_live_sessions', filter: `id=eq.${id}` }, payload => {
+          const row = payload.new;
+          try { deliver({ id: row.id, revision: row.revision, snapshot: row.snapshot, updatedAt: row.updated_at }); }
+          catch { onStatus('收到无效更新，正在重新载入'); refresh(); }
+        }).subscribe(status => {
+          if (stopped) return;
+          connected = status === 'SUBSCRIBED';
+          if (connected) { onStatus('已连接 · 只读同步'); refresh(); }
+          else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) { onStatus('实时连接恢复中 · 自动检查更新'); refresh(); }
+        });
+        // Periodic catch-up also covers suspended tabs, reconnect gaps and disabled publication.
+        timer = setIntervalFn(refresh, 15000);
+      })().catch(() => { if (!stopped) { onStatus('连接中断，正在重试'); timer = setIntervalFn(refresh, 3000); } });
+      return () => { stopped = true; if (timer) clearIntervalFn(timer); if (channel) client.removeChannel(channel); };
+    }
+  };
+  return adapter;
+}
+{ createSupabaseLiveClient };
+
+
+// The read URL contains a random session ID. Only the creator's browser holds the write capability.
 const LIVE_OWNER_KEY = 'ainvest-live-owners:v1';
 const LIVE_ID_PATTERN = /^[A-Za-z0-9_-]{32}$/;
 function createEditToken() {
   return Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
 }
+function syncIdentity(base) { return typeof base === 'string' ? base : 'supabase:' + base.url; }
 function readOwner(storage, base, id) {
-  try { return JSON.parse(storage.getItem(LIVE_OWNER_KEY) || '{}')[`${base}|${id}`] || null; } catch { return null; }
+  try { return JSON.parse(storage.getItem(LIVE_OWNER_KEY) || '{}')[`${syncIdentity(base)}|${id}`] || null; } catch { return null; }
 }
 function saveOwner(storage, base, id, token) {
   const saved = JSON.parse(storage.getItem(LIVE_OWNER_KEY) || '{}');
   const owners = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
-  owners[`${base}|${id}`] = token;
+  owners[`${syncIdentity(base)}|${id}`] = token;
   storage.setItem(LIVE_OWNER_KEY, JSON.stringify(owners));
+}
+function validateSupabaseConfig(config) {
+  const url = new URL(config.url);
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Supabase Project URL 需要有效的 HTTPS 根地址');
+  const key = config.publishableKey;
+  if (typeof key !== 'string' || key.startsWith('sb_secret_')) throw new Error('请使用 Publishable Key，不要使用服务端密钥');
+  if (!/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) {
+    let role;
+    try { role = JSON.parse(atob(key.split('.')[1].replaceAll('-', '+').replaceAll('_', '/'))).role; } catch { /* Reject unknown keys. */ }
+    if (role !== 'anon') throw new Error('只接受 Publishable Key 或旧版 anon key，禁止使用 service_role');
+  }
+  return { provider: 'supabase', url: url.origin, publishableKey: key };
 }
 async function discoverSyncBase(locationLike = location, fetcher = fetch) {
   if (!/^https?:$/.test(locationLike.protocol)) throw new Error('离线文件不支持实时同步，请打开本地或在线预览地址');
-  if (['127.0.0.1', 'localhost', '[::1]'].includes(locationLike.hostname)) return locationLike.origin;
-  const response = await fetcher(new URL('sync-config.json', locationLike.href), { cache: 'no-store' });
-  if (!response.ok) throw new Error('实时同步服务尚未配置');
-  const config = await response.json();
-  if (!config.apiBase) throw new Error('线上实时同步尚未启用，可以使用静态快照');
-  const url = new URL(config.apiBase);
-  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new Error('同步服务需要有效的 HTTPS 地址');
-  return url.href.replace(/\/$/, '');
+  const local = ['127.0.0.1', 'localhost', '[::1]'].includes(locationLike.hostname);
+  let config;
+  try {
+    const response = await fetcher(new URL('sync-config.json', locationLike.href), { cache: 'no-store' });
+    if (response.ok) config = await response.json();
+  } catch { /* The local Node demo can work without cloud configuration. */ }
+  if (config?.provider === 'supabase' && (config.url || config.publishableKey)) return validateSupabaseConfig(config);
+  if (config?.apiBase) {
+    const url = new URL(config.apiBase);
+    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new Error('同步服务需要有效的 HTTPS 地址');
+    return url.href.replace(/\/$/, '');
+  }
+  if (local) return locationLike.origin;
+  throw new Error('Supabase 尚未配置，可以暂时使用静态快照');
 }
-function createLiveClient(base, { fetcher = fetch, EventSourceClass = globalThis.EventSource } = {}) {
+function createLiveClient(base, options = {}) {
+  if (base?.provider === 'supabase') return createSupabaseLiveClient(base, options);
+  const { fetcher = fetch, EventSourceClass = globalThis.EventSource } = options;
   async function request(path, options = {}) {
     const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 10000);
     try {
@@ -2371,7 +2459,7 @@ function createLiveClient(base, { fetcher = fetch, EventSourceClass = globalThis
     }
   };
 }
-{ LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, discoverSyncBase, createLiveClient };
+{ LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, discoverSyncBase, createLiveClient, validateSupabaseConfig, syncIdentity };
 
 // A portable snapshot in the URL fragment; no account or server is needed.
 const MOBILE_SHARE_LIMIT = 100000;
@@ -3300,7 +3388,7 @@ function applyAimePalette(root,palette,theme){
 
 
 
-const VERSION = '0.12.0';
+const VERSION = '0.13.0';
 const STORAGE_KEY = 'ainvest-palette-lab:v1';
 const scenes = [
   { id: 'financial', name: '财报分析', en: 'Financial analysis', icon: 'file' },
@@ -3812,7 +3900,7 @@ app.addEventListener('click', async e => {
   if (action === 'fullscreen' || action === 'exit-fullscreen') { await setPreviewFullscreen(action === 'fullscreen'); return; }
   if (action === 'share-mobile') {
     if (!/^https?:$/.test(location.protocol)) { toast('请通过已部署的网址分享，离线文件可导出实验 JSON'); return; }
-    openModal(`${modalHead('分享手机预览')}<p>固定链接只读，电脑改色后自动同步。查看者需复制为自己的方案才能编辑。</p><button class="button primary" data-modal-action="live-share">${live.role==='owner'?'复制固定链接':'创建固定链接'}</button><p class="editor-footnote">${live.role==='owner'?'编辑权限只保存在创建方案的浏览器中。':'本地演示可试用；线上需先启用同步服务。'}</p><button class="button" data-modal-action="snapshot-share">分享静态快照</button><p class="editor-footnote">静态快照可在现有 GitHub Pages 使用；后续改色仍需重新分享。</p>`);
+    openModal(`${modalHead('分享手机预览')}<p>固定链接只读，电脑改色后自动同步。查看者需复制为自己的方案才能编辑。</p><button class="button primary" data-modal-action="live-share">${live.role==='owner'?'复制固定链接':'创建固定链接'}</button><p class="editor-footnote">${live.role==='owner'?'编辑权限只保存在创建方案的浏览器中。':'支持 Supabase；未配置时可分享静态快照。'}</p><button class="button" data-modal-action="snapshot-share">分享静态快照</button><p class="editor-footnote">静态快照可在现有 GitHub Pages 使用；后续改色仍需重新分享。</p>`);
     return;
   }
   if (action === 'scene') { state.scene = value; state.editorOpen = false; }

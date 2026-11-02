@@ -1,30 +1,52 @@
+import { createSupabaseLiveClient } from './supabase-sync.js';
 // The read URL contains a random session ID. Only the creator's browser holds the write capability.
 const LIVE_OWNER_KEY = 'ainvest-live-owners:v1';
 const LIVE_ID_PATTERN = /^[A-Za-z0-9_-]{32}$/;
 function createEditToken() {
   return Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
 }
+function syncIdentity(base) { return typeof base === 'string' ? base : 'supabase:' + base.url; }
 function readOwner(storage, base, id) {
-  try { return JSON.parse(storage.getItem(LIVE_OWNER_KEY) || '{}')[`${base}|${id}`] || null; } catch { return null; }
+  try { return JSON.parse(storage.getItem(LIVE_OWNER_KEY) || '{}')[`${syncIdentity(base)}|${id}`] || null; } catch { return null; }
 }
 function saveOwner(storage, base, id, token) {
   const saved = JSON.parse(storage.getItem(LIVE_OWNER_KEY) || '{}');
   const owners = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
-  owners[`${base}|${id}`] = token;
+  owners[`${syncIdentity(base)}|${id}`] = token;
   storage.setItem(LIVE_OWNER_KEY, JSON.stringify(owners));
+}
+function validateSupabaseConfig(config) {
+  const url = new URL(config.url);
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Supabase Project URL 需要有效的 HTTPS 根地址');
+  const key = config.publishableKey;
+  if (typeof key !== 'string' || key.startsWith('sb_secret_')) throw new Error('请使用 Publishable Key，不要使用服务端密钥');
+  if (!/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) {
+    let role;
+    try { role = JSON.parse(atob(key.split('.')[1].replaceAll('-', '+').replaceAll('_', '/'))).role; } catch { /* Reject unknown keys. */ }
+    if (role !== 'anon') throw new Error('只接受 Publishable Key 或旧版 anon key，禁止使用 service_role');
+  }
+  return { provider: 'supabase', url: url.origin, publishableKey: key };
 }
 async function discoverSyncBase(locationLike = location, fetcher = fetch) {
   if (!/^https?:$/.test(locationLike.protocol)) throw new Error('离线文件不支持实时同步，请打开本地或在线预览地址');
-  if (['127.0.0.1', 'localhost', '[::1]'].includes(locationLike.hostname)) return locationLike.origin;
-  const response = await fetcher(new URL('sync-config.json', locationLike.href), { cache: 'no-store' });
-  if (!response.ok) throw new Error('实时同步服务尚未配置');
-  const config = await response.json();
-  if (!config.apiBase) throw new Error('线上实时同步尚未启用，可以使用静态快照');
-  const url = new URL(config.apiBase);
-  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new Error('同步服务需要有效的 HTTPS 地址');
-  return url.href.replace(/\/$/, '');
+  const local = ['127.0.0.1', 'localhost', '[::1]'].includes(locationLike.hostname);
+  let config;
+  try {
+    const response = await fetcher(new URL('sync-config.json', locationLike.href), { cache: 'no-store' });
+    if (response.ok) config = await response.json();
+  } catch { /* The local Node demo can work without cloud configuration. */ }
+  if (config?.provider === 'supabase' && (config.url || config.publishableKey)) return validateSupabaseConfig(config);
+  if (config?.apiBase) {
+    const url = new URL(config.apiBase);
+    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new Error('同步服务需要有效的 HTTPS 地址');
+    return url.href.replace(/\/$/, '');
+  }
+  if (local) return locationLike.origin;
+  throw new Error('Supabase 尚未配置，可以暂时使用静态快照');
 }
-function createLiveClient(base, { fetcher = fetch, EventSourceClass = globalThis.EventSource } = {}) {
+function createLiveClient(base, options = {}) {
+  if (base?.provider === 'supabase') return createSupabaseLiveClient(base, options);
+  const { fetcher = fetch, EventSourceClass = globalThis.EventSource } = options;
   async function request(path, options = {}) {
     const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 10000);
     try {
@@ -47,4 +69,4 @@ function createLiveClient(base, { fetcher = fetch, EventSourceClass = globalThis
     }
   };
 }
-export { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, discoverSyncBase, createLiveClient };
+export { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, discoverSyncBase, createLiveClient, validateSupabaseConfig, syncIdentity };
