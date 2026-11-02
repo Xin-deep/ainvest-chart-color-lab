@@ -1,3 +1,5 @@
+import {renderWorkspaceTerminal,applyWorkspacePalette} from './scenes/workspace-terminal.js';
+import { renderTerminalScene, applyTerminalPalette } from './scenes/terminal.js';
 import { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, discoverSyncBase, createLiveClient } from './lib/live-sync.js';
 import { encodeMobilePreview, decodeMobilePreview } from './lib/mobile-preview.js';
 import { bindColorJsPicker } from './lib/colorjs-picker.js';
@@ -19,12 +21,14 @@ import { financialChartModules } from './data/financial-shared.js';
 
 import { defaultFinancialBoard, validateFinancialBoard, renderFinancialExtras } from './scenes/financial-extras.js';
 
-const VERSION = '0.13.0';
+const VERSION = '0.14.0';
 const STORAGE_KEY = 'ainvest-palette-lab:v1';
 const scenes = [
   { id: 'financial', name: '财报分析', en: 'Financial analysis', icon: 'file' },
   { id: 'aime', name: 'Aime 对话', en: 'Aime conversation', icon: 'chat' },
-  { id: 'custom', name: '自由看板', en: 'Custom dashboard', icon: 'grid' }
+  { id: 'custom', name: '自由看板', en: 'Custom dashboard', icon: 'grid' },
+  { id: 'terminal', name: 'web', en: 'web', icon: 'chart' },
+  { id: 'workspace', name: 'Terminal', en: 'Terminal workspace', icon: 'grid' }
 ];
 const paths = {
   logo: '<path d="M5 18V6h5a4 4 0 0 1 0 8H8"/><path d="M14 18h5M17 6v12"/>',
@@ -234,9 +238,9 @@ function changedCount() {
 }
 function globalChartStylePanel(){
   const style=state.globalChartStyle;
-  return `<section class="panel-section compact-settings"><div class="section-heading"><span class="section-label">全局图表样式</span></div><label>线条粗细<select data-global-chart-style="lineWidth" aria-label="全局线条粗细">${[['inherit','按模块设置'],['auto','统一默认'],...[.5,1,1.5,2,3].map(v=>[v,v+' px'])].map(([value,label])=>`<option value="${value}" ${style.lineWidth===value?'selected':''}>${label}</option>`).join('')}</select></label><label>面积纹理<select data-global-chart-style="texture" aria-label="全局面积纹理">${[['inherit','按模块设置'],['none','无纹理'],['stripes','斜线'],['cross','交叉线'],['dots','圆点']].map(([value,label])=>`<option value="${value}" ${style.texture===value?'selected':''}>${label}</option>`).join('')}</select></label><p class="editor-footnote">三个预览界面同步生效；全局设置优先于模块设置。</p></section>`;
+  return `<section class="panel-section compact-settings"><div class="section-heading"><span class="section-label">全局图表样式</span></div><label>线条粗细<select data-global-chart-style="lineWidth" aria-label="全局线条粗细">${[['inherit','按模块设置'],['auto','统一默认'],...[.5,1,1.5,2,3].map(v=>[v,v+' px'])].map(([value,label])=>`<option value="${value}" ${style.lineWidth===value?'selected':''}>${label}</option>`).join('')}</select></label><label>面积纹理<select data-global-chart-style="texture" aria-label="全局面积纹理">${[['inherit','按模块设置'],['none','无纹理'],['stripes','斜线'],['cross','交叉线'],['dots','圆点']].map(([value,label])=>`<option value="${value}" ${style.texture===value?'selected':''}>${label}</option>`).join('')}</select></label><p class="editor-footnote">所有预览界面同步生效；全局设置优先于模块设置。</p></section>`;
 }
-function moduleSettingsPanel(){return globalChartStylePanel()+(state.scene==='custom'?comparisonTemplatePanel(state.customTemplate)+compactBoardPanel(activeCustomBoard()):state.scene==='aime'?aimeBoardPanel(state.aimeBoard):financialDensityPanel());}
+function moduleSettingsPanel(){return globalChartStylePanel()+(['terminal','workspace'].includes(state.scene)?'':state.scene==='custom'?comparisonTemplatePanel(state.customTemplate)+compactBoardPanel(activeCustomBoard()):state.scene==='aime'?aimeBoardPanel(state.aimeBoard):financialDensityPanel());}
 function selectPreviewModule(id){
   if (isLiveReadOnly()) return;
   const board=activeModuleBoard();if(!board.modules.some(module=>module.id===id))return;
@@ -258,7 +262,7 @@ function render() {
   const scroll = document.querySelector('.side-scroll')?.scrollTop || 0;
   const paletteTabsScroll = document.querySelector('.palette-tabs')?.scrollLeft || 0;
   const oldCanvas = document.querySelector('#preview-canvas');
-  const oldSceneScroller = oldCanvas?.querySelector('.financial-content-frame, .compact-board-scroll, .aime-content-scroll') || oldCanvas;
+  const oldSceneScroller = oldCanvas?.querySelector('.financial-content-frame, .terminal-content-frame, .workspace-terminal-scroll, .compact-board-scroll, .aime-content-scroll') || oldCanvas;
   const canvasScroll = { top: oldCanvas?.dataset.scene===state.scene ? oldSceneScroller?.scrollTop || 0 : 0, left: oldSceneScroller?.scrollLeft || 0, sceneHeight: oldSceneScroller?.scrollHeight || 0 };
   const oldCustomFrame = oldCanvas?.dataset.scene===state.scene ? oldCanvas?.querySelector('.compact-board-scroll, .aime-content-scroll') : null;
   const visibleCard = oldCustomFrame && [...oldCustomFrame.querySelectorAll('[data-module-id]')].find(card => card.getBoundingClientRect().bottom > oldCustomFrame.getBoundingClientRect().top);
@@ -274,7 +278,7 @@ function render() {
       ${readOnly && !live.ready ? `<div class="live-viewer-notice"><p>${esc(live.error || '正在载入共享方案…')}</p>${live.error?'<button class="button" data-action="live-reload">重试</button>':''}</div>` : ''}
       ${mobileAime && !state.collapsed ? '<button class="aime-workbench-backdrop" data-action="collapse" aria-label="关闭颜色工作台"></button>' : ''}
       <section class="preview-workspace" aria-label="场景预览工作区">
-        <div class="preview-canvas ${['financial','custom','aime'].includes(state.scene) ? 'has-scene' : ''}" id="preview-canvas" role="region" aria-label="${scene.name}${['financial','custom','aime'].includes(state.scene) ? '，图表预览' : '，内容待添加'}" style="--canvas-bg:${palette.themes[state.theme].surface[0].hex}" data-scene="${state.scene}" data-theme="${state.theme}">${state.scene === 'financial' ? renderFinancialScene(renderFinancialExtras(state.financialBoard)) : state.scene === 'custom' ? renderCompactBoard(activeCustomBoard(),state.customTemplate==='free'?{}:{title:comparisonTemplates.find(t=>t.id===state.customTemplate).name,description:'全部 25 种图表 · 每种少量 / 大量数据对比'}) : state.scene === 'aime' ? renderAimeScene(state.aimeBoard,state.theme) : ''}</div>
+        <div class="preview-canvas ${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? 'has-scene' : ''}" id="preview-canvas" role="region" aria-label="${scene.name}${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? '，图表预览' : '，内容待添加'}" style="--canvas-bg:${palette.themes[state.theme].surface[0].hex}" data-scene="${state.scene}" data-theme="${state.theme}">${state.scene === 'financial' ? renderFinancialScene(renderFinancialExtras(state.financialBoard)) : state.scene === 'custom' ? renderCompactBoard(activeCustomBoard(),state.customTemplate==='free'?{}:{title:comparisonTemplates.find(t=>t.id===state.customTemplate).name,description:'全部 25 种图表 · 每种少量 / 大量数据对比'}) : state.scene === 'aime' ? renderAimeScene(state.aimeBoard,state.theme) : state.scene === 'terminal' ? renderTerminalScene() : state.scene === 'workspace' ? renderWorkspaceTerminal() : ''}</div>
       </section>
       <aside class="sidebar" id="color-workbench" aria-label="颜色操作面板" ${readOnly?'inert':''}>
         <div class="sidebar-header">
@@ -300,8 +304,10 @@ function render() {
   if (editor) document.querySelector(".sidebar-footer").before(editor);
   const canvas = document.querySelector('#preview-canvas');
   if (state.scene === 'financial') { applyFinancialPalette(canvas, palette, state.theme); repaintFinancialCharts(); }
+  if (state.scene === 'terminal') applyTerminalPalette(canvas,palette,state.theme,state.globalChartStyle);
+  if (state.scene === 'workspace') applyWorkspacePalette(canvas,palette,state.theme,state.globalChartStyle);
   if (['custom','aime'].includes(state.scene)) repaintCompactBoard();
-  const sceneScroller = canvas.querySelector('.financial-content-frame, .compact-board-scroll, .aime-content-scroll') || canvas;
+  const sceneScroller = canvas.querySelector('.financial-content-frame, .terminal-content-frame, .workspace-terminal-scroll, .compact-board-scroll, .aime-content-scroll') || canvas;
   const newSceneHeight = sceneScroller.scrollHeight;
   if (['custom','aime'].includes(state.scene)) {
     sceneScroller.scrollTop = canvasScroll.top;
@@ -395,6 +401,8 @@ function liveColor(hex) {
   for(const badges of document.querySelectorAll('[data-color-checks]'))badges.innerHTML=renderColorCheckBadges(report.entries[Number(badges.dataset.colorChecks)],report);
   if (state.role === 'surface' && i === 0) document.querySelector('#preview-canvas').style.setProperty('--canvas-bg', hex);
   if (state.scene === 'financial') { applyFinancialPalette(document.querySelector('#preview-canvas'), current(), state.theme); cancelAnimationFrame(compactColorFrame);compactColorFrame=requestAnimationFrame(repaintFinancialCharts); }
+  if (state.scene === 'terminal') applyTerminalPalette(document.querySelector('#preview-canvas'),current(),state.theme,state.globalChartStyle);
+  if (state.scene === 'workspace') applyWorkspacePalette(document.querySelector('#preview-canvas'),current(),state.theme,state.globalChartStyle);
   if (['custom','aime'].includes(state.scene)) { cancelAnimationFrame(compactColorFrame); compactColorFrame = requestAnimationFrame(repaintCompactBoard); }
 }
 function bindInputs() {
