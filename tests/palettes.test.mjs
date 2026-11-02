@@ -64,3 +64,14 @@ test('plain text palettes preserve order, support mixed separators and independe
   assert.deepEqual(separate.themes.dark.categorical.map(c=>c.hex),['#FF0000','#000000']);
   for(const [a,b] of [['',''],['#fff','broken'],['#fff invalid',''],[Array(65).fill('#fff').join(' '),'']])assert.throws(()=>parseTextPalette(a,b));
 });
+
+test('brand palette placeholders are selectable, valid and share one neutral stand-in', () => {
+  assert.deepEqual(presets.map(p => p.name), ['Ainvest 原始色板', 'Claude 色板', 'TradingView 色板', 'Simply Wall St 色板', 'Robinhood 色板']);
+  assert.equal(new Set(presets.map(p => p.id)).size, presets.length);
+  assert.ok(!presets.some(p => ['finary', 'robinhood', 'wealthsimple'].includes(p.id)), 'retired ids are reset to the default palette on load');
+  for (const palette of presets.slice(1)) {
+    assert.match(palette.source, /占位/);
+    assert.equal(validatePalette(palette).themes.dark.categorical.length, 7);
+    assert.deepEqual(palette.themes.light.categorical, presets[1].themes.light.categorical);
+  }
+});
