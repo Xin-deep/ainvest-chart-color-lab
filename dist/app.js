@@ -9,7 +9,7 @@ import { defaultCheckSettings, normalizeCheckSettings, buildPaletteCheckReport }
 import { renderColorChecks, renderColorCheckBadges } from './scenes/color-checks.js';
 import { hexToOklch, checkOklch, oklchCss } from './lib/oklch.js';
 import { presets } from './data/presets.js';
-import { clone, roles, validatePalette, parseImport, parseTextPalette } from './lib/palettes.js';
+import { clone, roles, validatePalette, restorePalette, restoreSavedPalettes, parseImport, parseTextPalette } from './lib/palettes.js';
 import { normalizeColor, hexToHsv, hsvToHex, rgbText } from './lib/colors.js';
 import { renderFinancialScene, applyFinancialPalette } from './scenes/financial.js';
 
@@ -21,7 +21,7 @@ import { financialChartModules } from './data/financial-shared.js';
 
 import { defaultFinancialBoard, validateFinancialBoard, renderFinancialExtras } from './scenes/financial-extras.js';
 
-const VERSION = '0.15.0';
+const VERSION = '0.16.0';
 const STORAGE_KEY = 'ainvest-palette-lab:v1';
 const scenes = [
   { id: 'financial', name: '财报分析', en: 'Financial analysis', icon: 'file' },
@@ -76,6 +76,12 @@ try {
   }
 } catch { storageAvailable = false; }
 if (['finary','robinhood','wealthsimple'].includes(state.draft.id)) { state.baseline = clone(presets[0]); state.draft = clone(presets[0]); }
+// Unedited presets stored earlier pick up the current preset colors; edited drafts stay as they are.
+function refreshUneditedPreset() {
+  const preset = presets.find(p => p.id === state.draft.id);
+  if (preset && !changedCount()) { state.baseline = clone(preset); state.draft = clone(preset); }
+}
+refreshUneditedPreset();
 const mobileEntry = document.body.dataset.mobilePreview === 'true';
 const requestedScene = new URLSearchParams(location.search).get('scene') || (mobileEntry ? 'aime' : null);
 if (scenes.some(s => s.id === requestedScene)) state.scene = requestedScene;
@@ -83,7 +89,7 @@ let mobileShareError = '', sharedPreviewLoaded = false;
 try {
   const shared = decodeMobilePreview(location.hash);
   if (shared) {
-    const baseline = validatePalette(shared.baseline), draft = validatePalette(shared.draft);
+    const baseline = restorePalette(shared.baseline, presets), draft = restorePalette(shared.draft, presets);
     const aimeBoard = validateAimeBoard(shared.aimeBoard);
     state = { ...state, baseline, draft, aimeBoard, scene: 'aime', theme: shared.theme === 'dark' ? 'dark' : 'light', mode: shared.mode === 'baseline' ? 'baseline' : 'draft', globalChartStyle: normalizeGlobalChartStyle(shared.globalChartStyle) };
     sharedPreviewLoaded = true;
@@ -95,13 +101,15 @@ if (mobileEntry || (state.scene === 'aime' && innerWidth <= 650)) { state.collap
 const isMobileAime = () => state.scene === 'aime' && (mobileEntry || innerWidth <= 650);
 const liveParams = new URLSearchParams(location.search);
 const requestedLiveId = liveParams.get('live') || liveParams.get('edit');
-const live = { role: requestedLiveId ? 'viewer' : null, id: requestedLiveId, loading: !!requestedLiveId, ready: false, client: null, base: null, token: null, revision: 0, status: requestedLiveId ? '正在连接共享方案…' : '', error: '', pending: null, writing: false, lastJSON: '', timer: null, retry: null, stop: null, generation: 0, conflict: false, viewerTheme: null, viewerPalette: null };
+const live = { role: requestedLiveId ? 'viewer' : null, id: requestedLiveId, loading: !!requestedLiveId, ready: false, client: null, base: null, token: null, revision: 0, status: requestedLiveId ? '正在连接共享方案…' : '', error: '', pending: null, writing: false, lastJSON: '', timer: null, retry: null, stop: null, generation: 0, conflict: false, viewerTheme: null, viewerPalette: null, sharedPalettes: [] };
 const isLiveReadOnly = () => live.role === 'viewer' || live.loading;
 if (requestedLiveId) { state.scene = 'aime'; state.collapsed = true; state.previewFullscreen = false; }
-function liveSnapshot() { return { baseline: state.baseline, draft: state.draft, aimeBoard: state.aimeBoard, theme: state.theme, mode: state.mode, globalChartStyle: state.globalChartStyle }; }
+function liveSnapshot() { return { baseline: state.baseline, draft: state.draft, saved: state.saved, aimeBoard: state.aimeBoard, theme: state.theme, mode: state.mode, globalChartStyle: state.globalChartStyle }; }
 function applyLiveSnapshot(snapshot) {
-  const baseline = validatePalette(snapshot.baseline), draft = validatePalette(snapshot.draft), aimeBoard = validateAimeBoard(snapshot.aimeBoard);
+  const baseline = restorePalette(snapshot.baseline, presets), draft = restorePalette(snapshot.draft, presets), aimeBoard = validateAimeBoard(snapshot.aimeBoard);
+  live.sharedPalettes = restoreSavedPalettes(snapshot.saved);
   state = { ...state, baseline, draft, aimeBoard, scene: 'aime', theme: snapshot.theme === 'dark' ? 'dark' : 'light', mode: snapshot.mode === 'baseline' ? 'baseline' : 'draft', globalChartStyle: normalizeGlobalChartStyle(snapshot.globalChartStyle), editorOpen: false };
+  refreshUneditedPreset();
 }
 // The owner's theme is only the default on first open; afterwards each viewer keeps their own.
 function keepViewerTheme() {
@@ -135,9 +143,9 @@ async function flushLiveSnapshot() {
 }
 function detachLive() {
   live.stop?.(); clearTimeout(live.timer); clearTimeout(live.retry);
-  live.generation++; Object.assign(live, { role: null, id: null, ready: false, loading: false, pending: null, writing: false, stop: null, token: null, retry: null, conflict: false, error: '', viewerPalette: null });
+  live.generation++; Object.assign(live, { role: null, id: null, ready: false, loading: false, pending: null, writing: false, stop: null, token: null, retry: null, conflict: false, error: '', viewerPalette: null, sharedPalettes: [] });
 }
-async function connectLive({ throwOnError = false } = {}) {
+async function connectLive({ throwOnError = false, keepLocal = false } = {}) {
   if (!live.id) return;
   const generation = ++live.generation;
   live.stop?.(); clearTimeout(live.timer); clearTimeout(live.retry); live.retry = null; live.loading = true; live.error = ''; liveStatus('正在连接共享方案…'); render();
@@ -147,12 +155,16 @@ async function connectLive({ throwOnError = false } = {}) {
     const record = await live.client.get(live.id);
     if (generation !== live.generation) return;
     const token = new URLSearchParams(location.search).has('edit') ? readOwner(localStorage, live.base, live.id) : null;
-    applyLiveSnapshot(record.snapshot); live.role = token ? 'owner' : 'viewer'; live.token = token; live.revision = record.revision; live.ready = true; live.loading = false; live.error = ''; live.conflict = false; live.pending = null; live.writing = false;
-    live.lastJSON = JSON.stringify(liveSnapshot());
+    // Sharing again publishes what the owner is looking at instead of restoring the stored copy.
+    const publishLocal = keepLocal && !!token;
+    if (!publishLocal) applyLiveSnapshot(record.snapshot);
+    live.role = token ? 'owner' : 'viewer'; live.token = token; live.revision = record.revision; live.ready = true; live.loading = false; live.error = ''; live.conflict = false; live.pending = null; live.writing = false;
+    live.lastJSON = publishLocal ? '' : JSON.stringify(liveSnapshot());
     if (token) saveActiveOwner(localStorage, live.base, live.id);
     else { keepViewerTheme(); live.viewerPalette = readViewerPalette(localStorage, live.id); }
     state.collapsed = live.role === 'viewer';
     liveStatus(token ? '已同步 · 查看页面自动更新' : '已连接 · 只读同步'); render();
+    if (publishLocal) queueLiveSnapshot();
     if (!token) live.stop = live.client.subscribe(live.id, next => {
       if (generation !== live.generation || next.revision <= live.revision) return;
       applyLiveSnapshot(next.snapshot); keepViewerTheme(); live.revision = next.revision; liveStatus('已连接 · 只读同步'); render();
@@ -167,7 +179,7 @@ async function ensureLiveOwner() {
   if (activeId) {
     live.id = activeId;
     const url = new URL(location.href); url.searchParams.delete('live'); url.searchParams.set('edit', activeId); url.hash = ''; historyReplaceLive(url);
-    await connectLive({ throwOnError: true });
+    await connectLive({ throwOnError: true, keepLocal: true });
     if (live.role !== 'owner') throw new Error('原固定链接的编辑权限不可用');
     return;
   }
@@ -205,8 +217,14 @@ function repaintCompactBoard() {
 let history = [], future = [], pendingImport = null, importedIndex = 0, editorTransaction = null, toastTimer, deletedScheme = null;
 const app = document.querySelector('#app'), modal = document.querySelector('#modal');
 const sharedPalette = () => state.mode === 'baseline' ? state.baseline : state.draft;
-const viewerPreset = () => (live.role === 'viewer' && presets.find(p => p.id === live.viewerPalette)) || null;
-const current = () => viewerPreset() || sharedPalette();
+const viewerOptions = () => [...presets, ...live.sharedPalettes];
+// The tab that shows the owner's live colors, using the same rule as the workbench tabs.
+const ownerTabId = () => viewerOptions().some(p => p.id === state.draft.id) && !changedCount() ? state.draft.id : 'current';
+function viewerPick() {
+  if (live.role !== 'viewer' || !live.viewerPalette || live.viewerPalette === ownerTabId()) return null;
+  return viewerOptions().find(p => p.id === live.viewerPalette) || null;
+}
+const current = () => viewerPick() || sharedPalette();
 const selectedColor = () => state.draft.themes[state.theme][state.role][state.selected];
 function persist() {
   if (isLiveReadOnly()) return;
@@ -330,9 +348,9 @@ function render() {
   bindInputs();
 }
 function viewerPaletteBar() {
-  const selected = viewerPreset()?.id || '';
-  const options = [{ id: '', name: '分享方案', palette: sharedPalette() }, ...presets.map(p => ({ id: p.id, name: p.id === 'ainvest' ? '原始色板' : p.name, palette: p }))];
-  return `<div class="aime-viewer-palettes" role="group" aria-label="切换色板">${options.map(o => `<button data-action="viewer-palette" data-value="${esc(o.id)}" aria-pressed="${o.id === selected}" class="${o.id === selected ? 'active' : ''}"><i style="background:${o.palette.themes[state.theme].categorical[0].hex}"></i>${esc(o.name)}</button>`).join('')}</div>`;
+  const options = viewerOptions(), ownerTab = ownerTabId(), selected = viewerPick()?.id || ownerTab;
+  if (ownerTab === 'current') options.push({ ...sharedPalette(), id: 'current', name: state.draft.name + (options.some(p => p.id === state.draft.id) ? ' · 当前调整' : '') });
+  return `<div class="aime-viewer-palettes" role="group" aria-label="切换色板">${options.map(p => `<button data-action="viewer-palette" data-value="${esc(p.id)}" aria-pressed="${p.id === selected}" class="${p.id === selected ? 'active' : ''}"><i style="background:${p.themes[state.theme].categorical[0].hex}"></i>${esc(p.id === 'ainvest' ? '原始色板' : p.name)}</button>`).join('')}</div>`;
 }
 function paletteTabs() {
   const options = [...presets, ...state.saved];
@@ -549,7 +567,7 @@ app.addEventListener('click', async e => {
   if (liveAction === 'live-copy') {
     if (!live.ready) return;
     clearActiveOwner(localStorage, live.base);
-    const picked = viewerPreset();
+    const picked = viewerPick();
     if (picked) { state.baseline = clone(picked); state.draft = clone(picked); }
     detachLive(); historyReplaceLive(new URL('aime.html', location.href));
     state.baseline.id = crypto.randomUUID(); state.draft.id = state.baseline.id; state.draft.name += ' · 我的副本'; state.collapsed = false; state.editorOpen = false; history = []; future = [];
@@ -560,7 +578,8 @@ app.addEventListener('click', async e => {
     saveViewerTheme(localStorage, live.viewerTheme); state.theme = live.viewerTheme; render(); return;
   }
   if (liveAction === 'viewer-palette' && live.role === 'viewer' && live.ready) {
-    live.viewerPalette = e.target.closest('[data-action]').dataset.value || null;
+    const value = e.target.closest('[data-action]').dataset.value;
+    live.viewerPalette = value === ownerTabId() ? null : value;
     saveViewerPalette(localStorage, live.id, live.viewerPalette); render(); return;
   }
   if (isLiveReadOnly()) return;
@@ -662,7 +681,7 @@ modal.addEventListener('click', async e => {
   }
   if (e.target.closest('[data-modal-action="snapshot-share"]')) {
     const url = new URL('aime.html', location.href);
-    try { url.hash = 'aime=' + encodeMobilePreview(liveSnapshot()); }
+    try { url.hash = 'aime=' + encodeMobilePreview({ ...liveSnapshot(), saved: undefined }); }
     catch (error) { toast(error.message); return; }
     openModal(`${modalHead('静态快照链接')}<p>这是分享时的快照，后续改色请重新分享。</p><textarea class="code-area" id="mobile-share-url" readonly aria-label="手机预览链接">${esc(url.href)}</textarea><div class="modal-actions"><button class="button" data-modal-action="close">关闭</button><button class="button primary" data-modal-action="copy-mobile-link">复制链接</button></div>`);
     return;

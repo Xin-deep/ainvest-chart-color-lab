@@ -148,3 +148,14 @@ test('viewer palette choice is kept per link, can be cleared and tolerates corru
   assert.equal(readViewerPalette(blocked, 'one'), null);
   assert.doesNotThrow(() => saveViewerPalette(blocked, 'one', 'claude'));
 });
+
+test('the sync service keeps palette identity and saved palettes for viewers', async t => {
+  const { base } = await fixture(t);
+  const source = snapshot();
+  source.draft = { ...source.draft, id: 'claude' };
+  source.saved = [{ ...structuredClone(presets[0]), id: 'plan-a', name: '方案 A' }];
+  const created = await api(base, '', 'POST', { snapshot: source, editToken: token });
+  const { data } = await api(base, '/' + created.data.id);
+  assert.equal(data.snapshot.draft.id, 'claude');
+  assert.deepEqual(data.snapshot.saved.map(p => [p.id, p.name]), [['plan-a', '方案 A']]);
+});

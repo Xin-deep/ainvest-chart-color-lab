@@ -69,3 +69,15 @@ test('invalid payloads are rejected and copied sessions have separate identities
   assert.equal((await rpc('aime_join_live', [original.id])).snapshot.theme, 'light');
   await assert.rejects(rpc('aime_update_live', [original.id, 'c'.repeat(64), 1, changed]), error => error.code === 'PT403');
 });
+
+test('snapshots keep palette identity and saved palettes for viewers', async () => {
+  await user(owner);
+  const source = snapshot();
+  source.draft.id = 'claude';
+  source.saved = [{ ...structuredClone(presets[0]), id: 'plan-a', name: '方案 A' }];
+  const created = await rpc('aime_create_live', [source, token]);
+  await user(viewer);
+  const joined = await rpc('aime_join_live', [created.id]);
+  assert.equal(joined.snapshot.draft.id, 'claude');
+  assert.deepEqual(joined.snapshot.saved.map(p => p.id), ['plan-a']);
+});
