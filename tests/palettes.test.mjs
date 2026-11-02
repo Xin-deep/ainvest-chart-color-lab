@@ -66,7 +66,7 @@ test('plain text palettes preserve order, support mixed separators and independe
 });
 
 test('brand palettes use the supplied values and backgrounds', () => {
-  assert.deepEqual(presets.map(p => p.name), ['Ainvest 原始色板', 'Claude 色板', 'TradingView 色板', 'Simply Wall St 色板', 'Robinhood 色板']);
+  assert.deepEqual(presets.map(p => p.name), ['Ainvest 原始色板', 'Claude', 'TradingView', 'Simply Wall St', 'Robinhood']);
   assert.equal(new Set(presets.map(p => p.id)).size, presets.length);
   assert.ok(!presets.some(p => ['finary', 'robinhood', 'wealthsimple'].includes(p.id)), 'retired ids are reset to the default palette on load');
   const byId = Object.fromEntries(presets.map(p => [p.id, p])), hex = list => list.map(c => c.hex);
@@ -93,6 +93,7 @@ test('shared palettes keep their identity so they match their tab again', () => 
   assert.equal(restorePalette(presets[1], presets).id, 'claude');
   const polluted = { ...structuredClone(presets[0]), id: 'imported' };
   assert.equal(restorePalette(polluted, presets).id, 'ainvest');
+  assert.equal(restorePalette({ ...structuredClone(presets[1]), id: 'imported', name: 'Claude 色板' }, presets).id, 'claude');
   assert.equal(restorePalette({ ...structuredClone(presets[0]), id: 'imported', name: '别的方案' }, presets).id, 'imported');
 });
 test('saved palettes from a snapshot drop invalid or anonymous entries and tolerate old snapshots', () => {

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createSyncServer } from '../scripts/sync-server.mjs';
 import { presets } from '../dist/data/presets.js';
-import { createLiveClient, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, saveViewerPalette, discoverSyncBase } from '../dist/lib/live-sync.js';
+import { createLiveClient, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, saveViewerPalette, isQuietLiveStatus, discoverSyncBase } from '../dist/lib/live-sync.js';
 const token = 'a'.repeat(64);
 const snapshot = () => ({ baseline: structuredClone(presets[0]), draft: structuredClone(presets[0]), aimeBoard: { catalogVersion: 3, platform: 'mobile', columns: 1, density: 'compact', modules: [{ id: 'chart-one', type: 'line-multi', count: 12, series: 3, fixture: 'aime-growth' }] }, theme: 'light', mode: 'draft', globalChartStyle: { lineWidth: 'inherit', texture: 'inherit' } });
 async function fixture(t) {
@@ -158,4 +158,9 @@ test('the sync service keeps palette identity and saved palettes for viewers', a
   const { data } = await api(base, '/' + created.data.id);
   assert.equal(data.snapshot.draft.id, 'claude');
   assert.deepEqual(data.snapshot.saved.map(p => [p.id, p.name]), [['plan-a', '方案 A']]);
+});
+
+test('only routine sync states stay silent; connection and write problems stay visible', () => {
+  for (const status of ['', '已连接 · 只读同步', '已同步 · 查看页面自动更新', '正在同步…']) assert.equal(isQuietLiveStatus(status), true, status);
+  for (const status of ['正在连接共享方案…', '连接中断，正在重连', '连接中断，正在重试', '实时连接恢复中 · 自动检查更新', '暂未同步，正在重试', '同步已暂停 · 请重新载入或复制方案', '收到无效更新，请刷新重试']) assert.equal(isQuietLiveStatus(status), false, status);
 });
