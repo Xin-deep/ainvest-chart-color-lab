@@ -1,15 +1,5 @@
-import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
-import { resolve, extname, sep } from 'node:path';
-const root = resolve('dist'), port = Number(process.env.PORT || 4317);
-const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8' };
-createServer(async (req, res) => {
-  try {
-    const path = resolve(root, '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
-    if (path !== root && !path.startsWith(root + sep)) { res.writeHead(403).end(); return; }
-    const file = path === root || path.endsWith(sep) ? resolve(path, 'index.html') : path;
-    res.setHeader('Content-Type', types[extname(file)] || 'application/octet-stream');
-    res.setHeader('Cache-Control', 'no-store');
-    res.end(await readFile(file));
-  } catch { res.writeHead(404).end('Not found'); }
-}).listen(port, '127.0.0.1', () => console.log(`Local: http://127.0.0.1:${port}`));
+import { resolve } from 'node:path';
+import { createSyncServer } from './sync-server.mjs';
+const port = Number(process.env.PORT || 4317), host = process.env.HOST || '127.0.0.1';
+const server = createSyncServer({ dataDir: resolve(process.env.SYNC_DATA_DIR || '.data/live-sessions'), allowedOrigins: (process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean) });
+server.listen(port, host, () => console.log(`Palette Lab + live sync: http://${host}:${port}`));
