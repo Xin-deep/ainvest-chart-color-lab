@@ -4,6 +4,9 @@ const LIVE_OWNER_KEY = 'ainvest-live-owners:v1';
 const ACTIVE_LIVE_KEY = 'ainvest-live-active:v1';
 const VIEWER_THEME_KEY = 'ainvest-live-viewer-theme:v1';
 const VIEWER_PALETTE_KEY = 'ainvest-live-viewer-palette:v1';
+// Routine sync states stay silent; anything else needs the viewer's or owner's attention.
+const QUIET_LIVE_STATUSES = ['已连接 · 只读同步', '已同步 · 查看页面自动更新', '正在同步…'];
+const isQuietLiveStatus = status => !status || QUIET_LIVE_STATUSES.includes(status);
 const LIVE_ID_PATTERN = /^[A-Za-z0-9_-]{32}$/;
 function createEditToken() {
   return Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -126,4 +129,4 @@ function createLiveClient(base, options = {}) {
     }
   };
 }
-export { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, saveViewerPalette, discoverSyncBase, createLiveClient, validateSupabaseConfig, syncIdentity };
+export { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, saveViewerPalette, isQuietLiveStatus, discoverSyncBase, createLiveClient, validateSupabaseConfig, syncIdentity };

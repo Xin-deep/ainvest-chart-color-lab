@@ -39,7 +39,7 @@ export function validatePalette(input) {
 // validatePalette resets ids; shared snapshots need them to match their palette tab again.
 export function restorePalette(input, known = []) {
   const palette = validatePalette(input);
-  const id = typeof input.id === 'string' && input.id && input.id !== 'imported' ? input.id.slice(0, 80) : known.find(p => p.name === palette.name)?.id;
+  const id = typeof input.id === 'string' && input.id && input.id !== 'imported' ? input.id.slice(0, 80) : known.find(p => p.name.replace(/ 色板$/, '') === palette.name.replace(/ 色板$/, ''))?.id;
   if (id) palette.id = id;
   return palette;
 }
