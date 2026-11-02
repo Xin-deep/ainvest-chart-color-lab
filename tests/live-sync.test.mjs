@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createSyncServer } from '../scripts/sync-server.mjs';
 import { presets } from '../dist/data/presets.js';
-import { createLiveClient, readOwner, saveOwner, discoverSyncBase } from '../dist/lib/live-sync.js';
+import { createLiveClient, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, discoverSyncBase } from '../dist/lib/live-sync.js';
 const token = 'a'.repeat(64);
 const snapshot = () => ({ baseline: structuredClone(presets[0]), draft: structuredClone(presets[0]), aimeBoard: { catalogVersion: 3, platform: 'mobile', columns: 1, density: 'compact', modules: [{ id: 'chart-one', type: 'line-multi', count: 12, series: 3, fixture: 'aime-growth' }] }, theme: 'light', mode: 'draft', globalChartStyle: { lineWidth: 'inherit', texture: 'inherit' } });
 async function fixture(t) {
@@ -100,4 +100,17 @@ test('write credentials are browser-local, and production never falls back to an
   const location = new URL('https://xin-deep.github.io/lab/aime.html');
   await assert.rejects(discoverSyncBase(location, async () => ({ ok: true, json: async () => ({ apiBase: '' }) })), /尚未配置/);
   await assert.rejects(discoverSyncBase(location, async () => ({ ok: true, json: async () => ({ apiBase: 'http://sync.example' }) })), /HTTPS/);
+});
+
+test('the same browser reuses its active fixed link and an explicit copy starts a separate scheme', () => {
+  const values = new Map(), storage = { getItem: key => values.get(key) || null, setItem: (key, value) => values.set(key, value) };
+  const base = { provider: 'supabase', url: 'https://project.supabase.co', publishableKey: 'sb_publishable_public' };
+  const id = 'a'.repeat(32);
+  saveActiveOwner(storage, base, id);
+  assert.equal(readActiveOwner(storage, base), null); // A link alone cannot grant edit access.
+  saveOwner(storage, base, id, token);
+  assert.equal(readActiveOwner(storage, { ...base, publishableKey: 'sb_publishable_rotated' }), id);
+  clearActiveOwner(storage, base);
+  assert.equal(readActiveOwner(storage, base), null);
+  assert.equal(readOwner(storage, base, id), token); // Existing editor links remain recoverable.
 });

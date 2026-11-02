@@ -1,6 +1,7 @@
 import { createSupabaseLiveClient } from './supabase-sync.js';
 // The read URL contains a random session ID. Only the creator's browser holds the write capability.
 const LIVE_OWNER_KEY = 'ainvest-live-owners:v1';
+const ACTIVE_LIVE_KEY = 'ainvest-live-active:v1';
 const LIVE_ID_PATTERN = /^[A-Za-z0-9_-]{32}$/;
 function createEditToken() {
   return Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -14,6 +15,28 @@ function saveOwner(storage, base, id, token) {
   const owners = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
   owners[`${syncIdentity(base)}|${id}`] = token;
   storage.setItem(LIVE_OWNER_KEY, JSON.stringify(owners));
+}
+function readActiveOwner(storage, base) {
+  try {
+    const id = JSON.parse(storage.getItem(ACTIVE_LIVE_KEY) || '{}')[syncIdentity(base)];
+    return LIVE_ID_PATTERN.test(id) && readOwner(storage, base, id) ? id : null;
+  } catch { return null; }
+}
+function saveActiveOwner(storage, base, id) {
+  const saved = JSON.parse(storage.getItem(ACTIVE_LIVE_KEY) || '{}');
+  const active = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+  active[syncIdentity(base)] = id;
+  storage.setItem(ACTIVE_LIVE_KEY, JSON.stringify(active));
+}
+function clearActiveOwner(storage, base) {
+  if (!base) return;
+  try {
+    const saved = JSON.parse(storage.getItem(ACTIVE_LIVE_KEY) || '{}');
+    if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+      delete saved[syncIdentity(base)];
+      storage.setItem(ACTIVE_LIVE_KEY, JSON.stringify(saved));
+    }
+  } catch { /* A corrupt hint cannot affect the stored edit credentials. */ }
 }
 function validateSupabaseConfig(config) {
   const url = new URL(config.url);
@@ -69,4 +92,4 @@ function createLiveClient(base, options = {}) {
     }
   };
 }
-export { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, discoverSyncBase, createLiveClient, validateSupabaseConfig, syncIdentity };
+export { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, discoverSyncBase, createLiveClient, validateSupabaseConfig, syncIdentity };

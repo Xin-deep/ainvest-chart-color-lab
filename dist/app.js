@@ -1,4 +1,4 @@
-import { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, discoverSyncBase, createLiveClient } from './lib/live-sync.js';
+import { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, discoverSyncBase, createLiveClient } from './lib/live-sync.js';
 import { encodeMobilePreview, decodeMobilePreview } from './lib/mobile-preview.js';
 import { bindColorJsPicker } from './lib/colorjs-picker.js';
 import { comparisonTemplates, createComparisonBoard, validateComparisonBoards, comparisonTemplatePanel } from './scenes/comparison.js';
@@ -128,7 +128,7 @@ function detachLive() {
   live.stop?.(); clearTimeout(live.timer); clearTimeout(live.retry);
   live.generation++; Object.assign(live, { role: null, id: null, ready: false, loading: false, pending: null, writing: false, stop: null, token: null, retry: null, conflict: false, error: '' });
 }
-async function connectLive() {
+async function connectLive({ throwOnError = false } = {}) {
   if (!live.id) return;
   const generation = ++live.generation;
   live.stop?.(); clearTimeout(live.timer); clearTimeout(live.retry); live.retry = null; live.loading = true; live.error = ''; liveStatus('正在连接共享方案…'); render();
@@ -140,22 +140,33 @@ async function connectLive() {
     const token = new URLSearchParams(location.search).has('edit') ? readOwner(localStorage, live.base, live.id) : null;
     applyLiveSnapshot(record.snapshot); live.role = token ? 'owner' : 'viewer'; live.token = token; live.revision = record.revision; live.ready = true; live.loading = false; live.error = ''; live.conflict = false; live.pending = null; live.writing = false;
     live.lastJSON = JSON.stringify(liveSnapshot());
+    if (token) saveActiveOwner(localStorage, live.base, live.id);
     state.collapsed = live.role === 'viewer';
     liveStatus(token ? '已同步 · 查看页面自动更新' : '已连接 · 只读同步'); render();
     if (!token) live.stop = live.client.subscribe(live.id, next => {
       if (generation !== live.generation || next.revision <= live.revision) return;
       applyLiveSnapshot(next.snapshot); live.revision = next.revision; liveStatus('已连接 · 只读同步'); render();
     }, liveStatus);
-  } catch (error) { if (generation !== live.generation) return; live.loading = false; live.error = error.message; liveStatus(error.message); render(); }
+  } catch (error) { if (generation !== live.generation) return; live.loading = false; live.error = error.message; liveStatus(error.message); render(); if (throwOnError) throw error; }
 }
 async function ensureLiveOwner() {
   if (live.role === 'viewer' || live.loading) throw new Error('此方案只读，请先复制为自己的方案');
   if (live.role === 'owner' && live.ready) return;
-  const base = await discoverSyncBase(), client = createLiveClient(base), token = createEditToken();
+  const base = await discoverSyncBase();
+  const activeId = readActiveOwner(localStorage, base);
+  if (activeId) {
+    live.id = activeId;
+    const url = new URL(location.href); url.searchParams.delete('live'); url.searchParams.set('edit', activeId); url.hash = ''; historyReplaceLive(url);
+    await connectLive({ throwOnError: true });
+    if (live.role !== 'owner') throw new Error('原固定链接的编辑权限不可用');
+    return;
+  }
+  const client = createLiveClient(base), token = createEditToken();
   // Ensure write capability can be retained before creating a server-side record.
   const probe = 'ainvest-live-storage-test'; localStorage.setItem(probe, '1'); localStorage.removeItem(probe);
   const record = await client.create(liveSnapshot(), token);
   saveOwner(localStorage, base, record.id, token);
+  saveActiveOwner(localStorage, base, record.id);
   Object.assign(live, { role: 'owner', id: record.id, client, base, token, revision: record.revision, ready: true, lastJSON: JSON.stringify(liveSnapshot()) });
   const url = new URL(location.href); url.searchParams.delete('live'); url.searchParams.set('edit', record.id); url.hash = ''; historyReplaceLive(url);
   liveStatus('已同步 · 查看页面自动更新'); render();
@@ -512,6 +523,7 @@ app.addEventListener('click', async e => {
   if (liveAction === 'live-reload') { await connectLive(); return; }
   if (liveAction === 'live-copy') {
     if (!live.ready) return;
+    clearActiveOwner(localStorage, live.base);
     detachLive(); historyReplaceLive(new URL('aime.html', location.href));
     state.baseline.id = crypto.randomUUID(); state.draft.id = state.baseline.id; state.draft.name += ' · 我的副本'; state.collapsed = false; state.editorOpen = false; history = []; future = [];
     persist(); render(); toast('已复制为独立方案，不会修改原方案'); return;
@@ -531,7 +543,7 @@ app.addEventListener('click', async e => {
   if (action === 'fullscreen' || action === 'exit-fullscreen') { await setPreviewFullscreen(action === 'fullscreen'); return; }
   if (action === 'share-mobile') {
     if (!/^https?:$/.test(location.protocol)) { toast('请通过已部署的网址分享，离线文件可导出实验 JSON'); return; }
-    openModal(`${modalHead('分享手机预览')}<p>固定链接只读，电脑改色后自动同步。查看者需复制为自己的方案才能编辑。</p><button class="button primary" data-modal-action="live-share">${live.role==='owner'?'复制固定链接':'创建固定链接'}</button><p class="editor-footnote">${live.role==='owner'?'编辑权限只保存在创建方案的浏览器中。':'支持 Supabase；未配置时可分享静态快照。'}</p><button class="button" data-modal-action="snapshot-share">分享静态快照</button><p class="editor-footnote">静态快照可在现有 GitHub Pages 使用；后续改色仍需重新分享。</p>`);
+    openModal(`${modalHead('分享手机预览')}<p>固定链接只读，电脑改色后自动同步。查看者需复制为自己的方案才能编辑。</p><button class="button primary" data-modal-action="live-share">${live.role==='owner'?'复制固定链接':'获取固定链接'}</button><p class="editor-footnote">${live.role==='owner'?'编辑权限只保存在创建方案的浏览器中。':'同一浏览器会复用上次创建的链接；首次使用才新建。'}</p><button class="button" data-modal-action="snapshot-share">分享静态快照</button><p class="editor-footnote">静态快照可在现有 GitHub Pages 使用；后续改色仍需重新分享。</p>`);
     return;
   }
   if (action === 'scene') { state.scene = value; state.editorOpen = false; }
