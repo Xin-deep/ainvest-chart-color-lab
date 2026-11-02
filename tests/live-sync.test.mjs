@@ -113,4 +113,9 @@ test('the same browser reuses its active fixed link and an explicit copy starts 
   clearActiveOwner(storage, base);
   assert.equal(readActiveOwner(storage, base), null);
   assert.equal(readOwner(storage, base, id), token); // Existing editor links remain recoverable.
+  const oldValues = new Map(), oldStorage = { getItem: key => oldValues.get(key) || null, setItem: (key, value) => oldValues.set(key, value) };
+  saveOwner(oldStorage, base, id, token);
+  assert.equal(readActiveOwner(oldStorage, base), id); // Upgrade reuses an existing fixed link.
+  clearActiveOwner(oldStorage, base);
+  assert.equal(readActiveOwner(oldStorage, base), null); // Explicit copy keeps its own new link.
 });

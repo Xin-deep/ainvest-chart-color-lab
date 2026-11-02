@@ -18,8 +18,16 @@ function saveOwner(storage, base, id, token) {
 }
 function readActiveOwner(storage, base) {
   try {
-    const id = JSON.parse(storage.getItem(ACTIVE_LIVE_KEY) || '{}')[syncIdentity(base)];
-    return LIVE_ID_PATTERN.test(id) && readOwner(storage, base, id) ? id : null;
+    const identity = syncIdentity(base);
+    const active = JSON.parse(storage.getItem(ACTIVE_LIVE_KEY) || '{}');
+    if (Object.hasOwn(active, identity)) {
+      const id = active[identity];
+      return LIVE_ID_PATTERN.test(id) && readOwner(storage, base, id) ? id : null;
+    }
+    // Existing installations have edit credentials but no active-link marker.
+    const owners = JSON.parse(storage.getItem(LIVE_OWNER_KEY) || '{}');
+    return Object.keys(owners).reverse().map(key => key.startsWith(identity + '|') ? key.slice(identity.length + 1) : null)
+      .find(id => LIVE_ID_PATTERN.test(id) && readOwner(storage, base, id)) || null;
   } catch { return null; }
 }
 function saveActiveOwner(storage, base, id) {
@@ -33,7 +41,7 @@ function clearActiveOwner(storage, base) {
   try {
     const saved = JSON.parse(storage.getItem(ACTIVE_LIVE_KEY) || '{}');
     if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
-      delete saved[syncIdentity(base)];
+      saved[syncIdentity(base)] = null;
       storage.setItem(ACTIVE_LIVE_KEY, JSON.stringify(saved));
     }
   } catch { /* A corrupt hint cannot affect the stored edit credentials. */ }
