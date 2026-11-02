@@ -1,3 +1,4 @@
+import { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, discoverSyncBase, createLiveClient } from './lib/live-sync.js';
 import { encodeMobilePreview, decodeMobilePreview } from './lib/mobile-preview.js';
 import { bindColorJsPicker } from './lib/colorjs-picker.js';
 import { comparisonTemplates, createComparisonBoard, validateComparisonBoards, comparisonTemplatePanel } from './scenes/comparison.js';
@@ -18,7 +19,7 @@ import { financialChartModules } from './data/financial-shared.js';
 
 import { defaultFinancialBoard, validateFinancialBoard, renderFinancialExtras } from './scenes/financial-extras.js';
 
-const VERSION = '0.11.0';
+const VERSION = '0.12.0';
 const STORAGE_KEY = 'ainvest-palette-lab:v1';
 const scenes = [
   { id: 'financial', name: '财报分析', en: 'Financial analysis', icon: 'file' },
@@ -88,6 +89,80 @@ const requestedTheme = new URLSearchParams(location.search).get('theme');
 if (['light', 'dark'].includes(requestedTheme)) state.theme = requestedTheme;
 if (mobileEntry || (state.scene === 'aime' && innerWidth <= 650)) { state.collapsed = true; state.previewFullscreen = false; }
 const isMobileAime = () => state.scene === 'aime' && (mobileEntry || innerWidth <= 650);
+const liveParams = new URLSearchParams(location.search);
+const requestedLiveId = liveParams.get('live') || liveParams.get('edit');
+const live = { role: requestedLiveId ? 'viewer' : null, id: requestedLiveId, loading: !!requestedLiveId, ready: false, client: null, base: null, token: null, revision: 0, status: requestedLiveId ? '正在连接共享方案…' : '', error: '', pending: null, writing: false, lastJSON: '', timer: null, retry: null, stop: null, generation: 0, conflict: false };
+const isLiveReadOnly = () => live.role === 'viewer' || live.loading;
+if (requestedLiveId) { state.scene = 'aime'; state.collapsed = true; state.previewFullscreen = false; }
+function liveSnapshot() { return { baseline: state.baseline, draft: state.draft, aimeBoard: state.aimeBoard, theme: state.theme, mode: state.mode, globalChartStyle: state.globalChartStyle }; }
+function applyLiveSnapshot(snapshot) {
+  const baseline = validatePalette(snapshot.baseline), draft = validatePalette(snapshot.draft), aimeBoard = validateAimeBoard(snapshot.aimeBoard);
+  state = { ...state, baseline, draft, aimeBoard, scene: 'aime', theme: snapshot.theme === 'dark' ? 'dark' : 'light', mode: snapshot.mode === 'baseline' ? 'baseline' : 'draft', globalChartStyle: normalizeGlobalChartStyle(snapshot.globalChartStyle), editorOpen: false };
+}
+function liveStatus(message) { live.status = message; for (const el of document.querySelectorAll('.live-sync-status')) el.textContent = message; }
+function queueLiveSnapshot() {
+  if (live.role !== 'owner' || !live.ready || live.conflict) return;
+  const snapshot = JSON.stringify(liveSnapshot());
+  if (snapshot === live.lastJSON && !live.pending) return;
+  live.pending = snapshot;
+  liveStatus('正在同步…'); clearTimeout(live.timer);
+  live.timer = setTimeout(flushLiveSnapshot, 250);
+}
+async function flushLiveSnapshot() {
+  if (live.writing || !live.pending || live.role !== 'owner' || live.conflict) return;
+  const pending = live.pending, generation = live.generation;
+  live.pending = null; live.writing = true;
+  try {
+    const result = await live.client.update(live.id, live.token, live.revision, JSON.parse(pending));
+    if (generation !== live.generation) return;
+    live.revision = result.revision; live.lastJSON = pending;
+    liveStatus(live.pending ? '正在同步…' : '已同步 · 查看页面自动更新');
+  } catch (error) {
+    if (generation !== live.generation) return;
+    live.pending ||= pending;
+    if ([403, 409].includes(error.status)) { live.conflict = true; liveStatus('同步已暂停 · 请重新载入或复制方案'); toast(error.message); render(); }
+    else { liveStatus('暂未同步，正在重试'); clearTimeout(live.retry); live.retry = setTimeout(() => { live.retry = null; flushLiveSnapshot(); }, 2000); }
+  } finally { if (generation === live.generation) { live.writing = false; if (live.pending && !live.conflict && !live.retry) live.timer = setTimeout(flushLiveSnapshot, 250); } }
+}
+function detachLive() {
+  live.stop?.(); clearTimeout(live.timer); clearTimeout(live.retry);
+  live.generation++; Object.assign(live, { role: null, id: null, ready: false, loading: false, pending: null, writing: false, stop: null, token: null, retry: null, conflict: false, error: '' });
+}
+async function connectLive() {
+  if (!live.id) return;
+  const generation = ++live.generation;
+  live.stop?.(); clearTimeout(live.timer); clearTimeout(live.retry); live.retry = null; live.loading = true; live.error = ''; liveStatus('正在连接共享方案…'); render();
+  try {
+    if (!LIVE_ID_PATTERN.test(live.id)) throw new Error('无效的共享方案链接');
+    live.base = await discoverSyncBase(); live.client = createLiveClient(live.base);
+    const record = await live.client.get(live.id);
+    if (generation !== live.generation) return;
+    const token = new URLSearchParams(location.search).has('edit') ? readOwner(localStorage, live.base, live.id) : null;
+    applyLiveSnapshot(record.snapshot); live.role = token ? 'owner' : 'viewer'; live.token = token; live.revision = record.revision; live.ready = true; live.loading = false; live.error = ''; live.conflict = false; live.pending = null; live.writing = false;
+    live.lastJSON = JSON.stringify(liveSnapshot());
+    state.collapsed = live.role === 'viewer';
+    liveStatus(token ? '已同步 · 查看页面自动更新' : '已连接 · 只读同步'); render();
+    if (!token) live.stop = live.client.subscribe(live.id, next => {
+      if (generation !== live.generation || next.revision <= live.revision) return;
+      applyLiveSnapshot(next.snapshot); live.revision = next.revision; liveStatus('已连接 · 只读同步'); render();
+    }, liveStatus);
+  } catch (error) { if (generation !== live.generation) return; live.loading = false; live.error = error.message; liveStatus(error.message); render(); }
+}
+async function ensureLiveOwner() {
+  if (live.role === 'viewer' || live.loading) throw new Error('此方案只读，请先复制为自己的方案');
+  if (live.role === 'owner' && live.ready) return;
+  const base = await discoverSyncBase(), client = createLiveClient(base), token = createEditToken();
+  // Ensure write capability can be retained before creating a server-side record.
+  const probe = 'ainvest-live-storage-test'; localStorage.setItem(probe, '1'); localStorage.removeItem(probe);
+  const record = await client.create(liveSnapshot(), token);
+  saveOwner(localStorage, base, record.id, token);
+  Object.assign(live, { role: 'owner', id: record.id, client, base, token, revision: record.revision, ready: true, lastJSON: JSON.stringify(liveSnapshot()) });
+  const url = new URL(location.href); url.searchParams.delete('live'); url.searchParams.set('edit', record.id); url.hash = ''; historyReplaceLive(url);
+  liveStatus('已同步 · 查看页面自动更新'); render();
+}
+function historyReplaceLive(url) { window.history.replaceState(null, '', url); }
+function liveViewerURL() { const url = new URL('aime.html', location.href); url.searchParams.set('live', live.id); return url.href; }
+
 function activeCustomBoard(){
   if(state.customTemplate==='free')return state.customBoard;
   return state.comparisonBoards[state.customTemplate]||=(createComparisonBoard(state.customTemplate));
@@ -103,7 +178,7 @@ function repaintFinancialCharts(){
 }
 function repaintCompactBoard() {
   const board=activeModuleBoard();
-  mountCompactBoard(document.querySelector('#preview-canvas'), {...board,globalChartStyle:state.globalChartStyle}, current(), state.theme, (index, id) => { board.selected = id; state.editorOpen = true; state.role = 'categorical'; state.selected = index; state.panel = 'palette'; state.collapsed = false; if (state.previewFullscreen) setPreviewFullscreen(false); else render(); });
+  mountCompactBoard(document.querySelector('#preview-canvas'), {...board,globalChartStyle:state.globalChartStyle}, current(), state.theme, (index, id) => { if (isLiveReadOnly()) return; board.selected = id; state.editorOpen = true; state.role = 'categorical'; state.selected = index; state.panel = 'palette'; state.collapsed = false; if (state.previewFullscreen) setPreviewFullscreen(false); else render(); });
   if(state.scene==='aime')applyAimePalette(document.querySelector('#preview-canvas'),current(),state.theme);
 }
 let history = [], future = [], pendingImport = null, importedIndex = 0, editorTransaction = null, toastTimer, deletedScheme = null;
@@ -111,6 +186,8 @@ const app = document.querySelector('#app'), modal = document.querySelector('#mod
 const current = () => state.mode === 'baseline' ? state.baseline : state.draft;
 const selectedColor = () => state.draft.themes[state.theme][state.role][state.selected];
 function persist() {
+  if (isLiveReadOnly()) return;
+  queueLiveSnapshot();
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: 1, toolVersion: VERSION, baseline: state.baseline, draft: state.draft, scene: state.scene, theme: state.theme, collapsed: state.collapsed, saved: state.saved, customTemplate:state.customTemplate, comparisonBoards:state.comparisonBoards, customBoard: state.customBoard, aimeBoard: state.aimeBoard, financialDensity: state.financialDensity, financialBoard: state.financialBoard, checkSettings: state.checkSettings, globalChartStyle: state.globalChartStyle })); storageAvailable = true; }
   catch { storageAvailable = false; }
 }
@@ -150,6 +227,7 @@ function globalChartStylePanel(){
 }
 function moduleSettingsPanel(){return globalChartStylePanel()+(state.scene==='custom'?comparisonTemplatePanel(state.customTemplate)+compactBoardPanel(activeCustomBoard()):state.scene==='aime'?aimeBoardPanel(state.aimeBoard):financialDensityPanel());}
 function selectPreviewModule(id){
+  if (isLiveReadOnly()) return;
   const board=activeModuleBoard();if(!board.modules.some(module=>module.id===id))return;
   if(board.selected===id&&state.panel==='palette'&&!state.editorOpen&&!state.collapsed)return;
   const shellChanged=state.collapsed||state.previewFullscreen||state.panel!=='palette';
@@ -175,17 +253,19 @@ function render() {
   const visibleCard = oldCustomFrame && [...oldCustomFrame.querySelectorAll('[data-module-id]')].find(card => card.getBoundingClientRect().bottom > oldCustomFrame.getBoundingClientRect().top);
   const customAnchor = visibleCard && { id: visibleCard.dataset.moduleId, offset: visibleCard.getBoundingClientRect().top - oldCustomFrame.getBoundingClientRect().top };
   destroyCompactCharts();
-  const scene = scenes.find(s => s.id === state.scene), palette = current(), mobileAime = isMobileAime();
-  app.innerHTML = `<main class="app-shell two-pane ${mobileAime ? 'aime-mobile' : ''} ${state.collapsed ? 'panel-collapsed' : ''} ${state.previewFullscreen ? 'preview-fullscreen' : ''}">
+  const scene = scenes.find(s => s.id === state.scene), palette = current(), mobileAime = isMobileAime(), readOnly = isLiveReadOnly();
+  app.innerHTML = `<main class="app-shell two-pane ${mobileAime ? 'aime-mobile' : ''} ${readOnly ? 'live-viewer' : ''} ${readOnly && !live.ready ? 'live-unavailable' : ''} ${state.collapsed ? 'panel-collapsed' : ''} ${state.previewFullscreen ? 'preview-fullscreen' : ''}">
     ${state.previewFullscreen ? `<button class="button fullscreen-exit" data-action="exit-fullscreen" aria-label="退出全屏预览">${icon('close')}退出全屏 <kbd>Esc</kbd></button>` : ''}
     ${state.collapsed && !state.previewFullscreen && !mobileAime ? `<button class="icon-button workbench-launcher" data-action="collapse" aria-label="展开颜色工作台" title="展开颜色工作台" aria-expanded="false">${icon('panel')}</button>` : ''}
-    ${mobileAime ? `<nav class="aime-preview-controls" aria-label="手机预览工具"><span>Aime 预览</span><button data-action="theme" data-value="${state.theme==='light'?'dark':'light'}" aria-label="切换到${state.theme==='light'?'深色':'浅色'}主题">${icon(state.theme==='light'?'moon':'sun')}</button><button data-action="share-mobile">分享</button><button data-action="collapse" aria-expanded="${!state.collapsed}" aria-controls="color-workbench">调色</button></nav>` : ''}
+    ${mobileAime ? `<nav class="aime-preview-controls" aria-label="手机预览工具"><span>${readOnly?'只读预览':'Aime 预览'}</span>${readOnly ? `<button data-action="live-copy" ${!live.ready?'disabled':''}>复制为我的方案</button>` : `<button data-action="theme" data-value="${state.theme==='light'?'dark':'light'}" aria-label="切换到${state.theme==='light'?'深色':'浅色'}主题">${icon(state.theme==='light'?'moon':'sun')}</button><button data-action="share-mobile">分享</button><button data-action="collapse" aria-expanded="${!state.collapsed}" aria-controls="color-workbench">调色</button>`}</nav>` : ''}
+    ${live.role ? `<div class="live-sync-bar"><span class="live-sync-status" role="status">${esc(live.status)}</span>${live.error||live.conflict?'<button data-action="live-reload">重新载入</button>':''}${live.role==='owner'?'<button data-action="live-copy">复制为新方案</button>':''}</div>` : ''}
     <div class="workspace">
+      ${readOnly && !live.ready ? `<div class="live-viewer-notice"><p>${esc(live.error || '正在载入共享方案…')}</p>${live.error?'<button class="button" data-action="live-reload">重试</button>':''}</div>` : ''}
       ${mobileAime && !state.collapsed ? '<button class="aime-workbench-backdrop" data-action="collapse" aria-label="关闭颜色工作台"></button>' : ''}
       <section class="preview-workspace" aria-label="场景预览工作区">
         <div class="preview-canvas ${['financial','custom','aime'].includes(state.scene) ? 'has-scene' : ''}" id="preview-canvas" role="region" aria-label="${scene.name}${['financial','custom','aime'].includes(state.scene) ? '，图表预览' : '，内容待添加'}" style="--canvas-bg:${palette.themes[state.theme].surface[0].hex}" data-scene="${state.scene}" data-theme="${state.theme}">${state.scene === 'financial' ? renderFinancialScene(renderFinancialExtras(state.financialBoard)) : state.scene === 'custom' ? renderCompactBoard(activeCustomBoard(),state.customTemplate==='free'?{}:{title:comparisonTemplates.find(t=>t.id===state.customTemplate).name,description:'全部 25 种图表 · 每种少量 / 大量数据对比'}) : state.scene === 'aime' ? renderAimeScene(state.aimeBoard,state.theme) : ''}</div>
       </section>
-      <aside class="sidebar" id="color-workbench" aria-label="颜色操作面板">
+      <aside class="sidebar" id="color-workbench" aria-label="颜色操作面板" ${readOnly?'inert':''}>
         <div class="sidebar-header">
           <div class="sidebar-title"><div class="workbench-heading"><span>颜色工作台</span><small>Palette Lab <span class="mono">v${VERSION}</span></small></div><div class="workbench-history"><button class="icon-button" data-action="undo" title="撤销（⌘/Ctrl Z）" aria-label="撤销" ${!history.length ? 'disabled' : ''}>${icon('undo')}</button><button class="icon-button" data-action="redo" title="重做（⌘/Ctrl Shift Z）" aria-label="重做" ${!future.length ? 'disabled' : ''}>${icon('redo')}</button><button class="icon-button" data-action="collapse" title="收起颜色工作台" aria-label="收起颜色工作台" aria-expanded="true">${icon('panel')}</button></div></div>
           <nav class="workbench-scenes" aria-label="产品使用场景">${scenes.map(s => `<button class="scene-tab ${s.id === state.scene ? 'active' : ''}" data-action="scene" data-value="${s.id}" aria-current="${s.id === state.scene ? 'page' : 'false'}">${s.name}</button>`).join('')}</nav>
@@ -197,7 +277,7 @@ function render() {
         </div>
         ${state.mode === 'baseline' && state.panel === 'palette' ? `<div class="baseline-notice">${icon('lock')}正在查看原始基线 · 切换 B 后可调色</div>` : ''}
         <div class="side-scroll">${state.panel === 'palette' ? moduleSettingsPanel() + palettePanel() : state.panel === 'check' ? renderColorChecks(current(),state.theme,state.role,state.checkSettings) : importPanel()}</div>
-        <div class="sidebar-footer"><span id="save-status">${state.panel === 'import' ? '本地解析 · 文件内容不会上传' : storageAvailable ? `已自动保存 · ${changedCount()} 处颜色修改` : '浏览器存储不可用，请导出保存'}</span></div>
+        <div class="sidebar-footer"><span id="save-status">${state.panel === 'import' ? (live.role==='owner'?'应用导入后将同步至共享方案':'本地解析 · 文件内容不会上传') : storageAvailable ? `已自动保存 · ${changedCount()} 处颜色修改` : '浏览器存储不可用，请导出保存'}</span></div>
       </aside>
     </div>
   </main>`;
@@ -282,6 +362,7 @@ function applyPalette(p) {
   stashDraft(); state.editorOpen = false; state.draft = clone(p); state.baseline = clone(p); state.role = 'categorical'; state.selected = 0; state.mode = 'draft'; history = []; future = []; persist(); render();
 }
 function setColor(value, record = true, repaint = true) {
+  if (isLiveReadOnly()) return;
   if (state.mode === 'baseline') return;
   const hex = normalizeColor(value);
   if (hex === selectedColor().hex) return;
@@ -306,6 +387,7 @@ function liveColor(hex) {
   if (['custom','aime'].includes(state.scene)) { cancelAnimationFrame(compactColorFrame); compactColorFrame = requestAnimationFrame(repaintCompactBoard); }
 }
 function bindInputs() {
+  if (isLiveReadOnly()) return;
   const pickerShell=document.querySelector('[data-colorjs-picker]');
   let pickerRecorded=false;
   if(pickerShell)bindColorJsPicker(pickerShell,{
@@ -426,6 +508,15 @@ function download(value, name) {
   a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 app.addEventListener('click', async e => {
+  const liveAction = e.target.closest('[data-action]')?.dataset.action;
+  if (liveAction === 'live-reload') { await connectLive(); return; }
+  if (liveAction === 'live-copy') {
+    if (!live.ready) return;
+    detachLive(); historyReplaceLive(new URL('aime.html', location.href));
+    state.baseline.id = crypto.randomUUID(); state.draft.id = state.baseline.id; state.draft.name += ' · 我的副本'; state.collapsed = false; state.editorOpen = false; history = []; future = [];
+    persist(); render(); toast('已复制为独立方案，不会修改原方案'); return;
+  }
+  if (isLiveReadOnly()) return;
   const card=e.target.closest('[data-module-id]'),cardAction=e.target.closest('[data-action]');
   if(card&&(!cardAction||cardAction.dataset.action==='module-select')){selectPreviewModule(card.dataset.moduleId);return;}
   const mark = e.target.closest('[data-color-role]');
@@ -440,12 +531,7 @@ app.addEventListener('click', async e => {
   if (action === 'fullscreen' || action === 'exit-fullscreen') { await setPreviewFullscreen(action === 'fullscreen'); return; }
   if (action === 'share-mobile') {
     if (!/^https?:$/.test(location.protocol)) { toast('请通过已部署的网址分享，离线文件可导出实验 JSON'); return; }
-    try {
-      const url = new URL('aime.html', location.href);
-      url.hash = 'aime=' + encodeMobilePreview({ baseline: state.baseline, draft: state.draft, aimeBoard: state.aimeBoard, theme: state.theme, mode: state.mode, globalChartStyle: state.globalChartStyle });
-      openModal(`${modalHead('分享手机预览')}<p>复制链接到手机打开，可还原当前 A/B 配色、主题及 Aime 图表。链接是本次方案的快照，后续修改请重新分享。</p><textarea class="code-area" id="mobile-share-url" readonly aria-label="手机预览链接">${esc(url.href)}</textarea><div class="modal-actions"><button class="button" data-modal-action="close">关闭</button><button class="button primary" data-modal-action="copy-mobile-link">复制链接</button></div>`);
-      const field = document.querySelector('#mobile-share-url'); field.focus(); field.select();
-    } catch (error) { toast(error.message); }
+    openModal(`${modalHead('分享手机预览')}<p>固定链接只读，电脑改色后自动同步。查看者需复制为自己的方案才能编辑。</p><button class="button primary" data-modal-action="live-share">${live.role==='owner'?'复制固定链接':'创建固定链接'}</button><p class="editor-footnote">${live.role==='owner'?'编辑权限只保存在创建方案的浏览器中。':'本地演示可试用；线上需先启用同步服务。'}</p><button class="button" data-modal-action="snapshot-share">分享静态快照</button><p class="editor-footnote">静态快照可在现有 GitHub Pages 使用；后续改色仍需重新分享。</p>`);
     return;
   }
   if (action === 'scene') { state.scene = value; state.editorOpen = false; }
@@ -517,6 +603,24 @@ app.addEventListener('click', async e => {
   persist(); render();
 });
 modal.addEventListener('click', async e => {
+  const shareButton = e.target.closest('[data-modal-action="live-share"]');
+  if (shareButton) {
+    shareButton.disabled = true;
+    try {
+      await ensureLiveOwner();
+      openModal(`${modalHead('固定只读链接')}<p>复制给手机或其他人打开。当前浏览器调色后，查看页面会自动更新；查看者无法覆盖你的方案。</p><textarea class="code-area" id="mobile-share-url" readonly aria-label="手机预览链接">${esc(liveViewerURL())}</textarea><div class="modal-actions"><button class="button" data-modal-action="close">关闭</button><button class="button primary" data-modal-action="copy-mobile-link">复制链接</button></div>`);
+      const field = document.querySelector('#mobile-share-url'); field.focus(); field.select();
+    } catch (error) { shareButton.disabled = false; toast(error.message); }
+    return;
+  }
+  if (e.target.closest('[data-modal-action="snapshot-share"]')) {
+    const url = new URL('aime.html', location.href);
+    try { url.hash = 'aime=' + encodeMobilePreview(liveSnapshot()); }
+    catch (error) { toast(error.message); return; }
+    openModal(`${modalHead('静态快照链接')}<p>这是分享时的快照，后续改色请重新分享。</p><textarea class="code-area" id="mobile-share-url" readonly aria-label="手机预览链接">${esc(url.href)}</textarea><div class="modal-actions"><button class="button" data-modal-action="close">关闭</button><button class="button primary" data-modal-action="copy-mobile-link">复制链接</button></div>`);
+    return;
+  }
+  if (isLiveReadOnly()) return;
   if (e.target.closest('[data-modal-action="copy-mobile-link"]')) {
     const field = document.querySelector('#mobile-share-url');
     try { await navigator.clipboard.writeText(field.value); toast('已复制手机预览链接'); }
@@ -560,6 +664,11 @@ document.addEventListener('keydown', async e => {
   e.preventDefault(); document.querySelector(`[data-action="${e.shiftKey ? 'redo' : 'undo'}"]`)?.click();
 });
 render();
-if (mobileShareError) toast(mobileShareError);
+if (requestedLiveId) connectLive();
+else if (mobileShareError) toast(mobileShareError);
 else if (sharedPreviewLoaded) toast('已载入分享的 Aime 方案');
 else if (loaded) toast('已恢复上次的色板与实验设置');
+
+matchMedia('(max-width:650px)').addEventListener('change', () => {
+  if (state.scene === 'aime') { if (innerWidth <= 650) state.collapsed = true; render(); }
+});
