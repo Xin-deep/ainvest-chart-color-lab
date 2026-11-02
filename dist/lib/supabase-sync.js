@@ -6,10 +6,15 @@ function createSupabaseLiveClient(config, { sdkLoader = () => import(new URL('..
     const client = createClient(config.url, config.publishableKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
     const current = await client.auth.getSession();
     if (current.error) throw current.error;
-    if (!current.data.session) {
+    let session = current.data.session;
+    if (!session) {
       const signed = await client.auth.signInAnonymously();
       if (signed.error) throw new Error('无法建立 Supabase 会话，请确认已开启 Anonymous Sign-Ins：' + signed.error.message);
+      session = signed.data.session;
     }
+    if (!session?.access_token) throw new Error('Supabase 未返回有效的匿名会话');
+    // Wait until Realtime has the user JWT before subscribing; RLS otherwise sees the public key.
+    await client.realtime.setAuth(session.access_token);
     return client;
   })().catch(error => { initialization = null; throw error; });
   const rpc = async (name, params) => {

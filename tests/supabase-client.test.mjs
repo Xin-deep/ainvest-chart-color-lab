@@ -11,9 +11,10 @@ function fixture({ signed = true } = {}) {
   const sdk = { createClient(url, key, options) {
     createdClients++; assert.equal(options.auth.detectSessionInUrl, false);
     return {
-      auth: { getSession: async () => ({ data: { session: signed ? {} : null }, error: null }), signInAnonymously: async () => { signedIn++; return { data: {}, error: null }; } },
+      auth: { getSession: async () => ({ data: { session: signed ? { access_token: 'existing-user-jwt' } : null }, error: null }), signInAnonymously: async () => { signedIn++; return { data: { session: { access_token: 'new-user-jwt' } }, error: null }; } },
+      realtime: { setAuth: async token => { calls.push({ realtimeAuth: token }); } },
       rpc: async (name, params) => { calls.push({ name, params }); return failure ? { error: failure, data: null } : { error: null, data: record(revision) }; },
-      channel: () => channel,
+      channel: () => { calls.push({ channelCreated: true }); return channel; },
       removeChannel: () => { removed++; }
     };
   } };
@@ -25,8 +26,9 @@ test('Supabase adapter establishes one anonymous session and sends writes only t
   const f = fixture({ signed: false });
   await f.client.create({ name: 'palette' }, 'token');
   await f.client.update('id', 'token', 7, { name: 'edited' });
-  assert.deepEqual(f.calls[0], { name: 'aime_create_live', params: { p_snapshot: { name: 'palette' }, p_edit_token: 'token' } });
-  assert.deepEqual(f.calls[1], { name: 'aime_update_live', params: { p_id: 'id', p_edit_token: 'token', p_revision: 7, p_snapshot: { name: 'edited' } } });
+  assert.deepEqual(f.calls[0], { realtimeAuth: 'new-user-jwt' });
+  assert.deepEqual(f.calls[1], { name: 'aime_create_live', params: { p_snapshot: { name: 'palette' }, p_edit_token: 'token' } });
+  assert.deepEqual(f.calls[2], { name: 'aime_update_live', params: { p_id: 'id', p_edit_token: 'token', p_revision: 7, p_snapshot: { name: 'edited' } } });
   assert.deepEqual(f.counts(), { signedIn: 1, removed: 0, createdClients: 1 });
 });
 
@@ -35,6 +37,7 @@ test('Realtime subscription is session-scoped, catches reconnect gaps, ignores o
   const close = f.client.subscribe('f'.repeat(32), row => revisions.push(row.revision), message => statuses.push(message));
   await settle();
   assert.deepEqual(revisions, [1]);
+  assert.deepEqual(f.calls.slice(0, 3).map(call => Object.keys(call)[0]), ['realtimeAuth', 'name', 'channelCreated']);
   const filter = f.calls.find(c => c.kind === 'postgres_changes').filter;
   assert.equal(filter.filter, 'id=eq.' + 'f'.repeat(32)); assert.equal(filter.table, 'aime_live_sessions');
   f.revision(2); f.status('SUBSCRIBED'); await settle();
