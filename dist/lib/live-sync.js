@@ -2,6 +2,8 @@ import { createSupabaseLiveClient } from './supabase-sync.js';
 // The read URL contains a random session ID. Only the creator's browser holds the write capability.
 const LIVE_OWNER_KEY = 'ainvest-live-owners:v1';
 const ACTIVE_LIVE_KEY = 'ainvest-live-active:v1';
+const VIEWER_THEME_KEY = 'ainvest-live-viewer-theme:v1';
+const VIEWER_PALETTE_KEY = 'ainvest-live-viewer-palette:v1';
 const LIVE_ID_PATTERN = /^[A-Za-z0-9_-]{32}$/;
 function createEditToken() {
   return Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -45,6 +47,30 @@ function clearActiveOwner(storage, base) {
       storage.setItem(ACTIVE_LIVE_KEY, JSON.stringify(saved));
     }
   } catch { /* A corrupt hint cannot affect the stored edit credentials. */ }
+}
+function readViewerTheme(storage) {
+  try {
+    const theme = storage.getItem(VIEWER_THEME_KEY);
+    return ['light', 'dark'].includes(theme) ? theme : null;
+  } catch { return null; }
+}
+function saveViewerTheme(storage, theme) {
+  try { storage.setItem(VIEWER_THEME_KEY, theme); } catch { /* The choice still applies to the open page. */ }
+}
+// Stored per link so a choice made on one link never hides the colors shared by another.
+function readViewerPalette(storage, id) {
+  try {
+    const palette = JSON.parse(storage.getItem(VIEWER_PALETTE_KEY) || '{}')[id];
+    return typeof palette === 'string' ? palette : null;
+  } catch { return null; }
+}
+function saveViewerPalette(storage, id, palette) {
+  try {
+    const saved = JSON.parse(storage.getItem(VIEWER_PALETTE_KEY) || '{}');
+    const choices = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+    if (palette) choices[id] = palette; else delete choices[id];
+    storage.setItem(VIEWER_PALETTE_KEY, JSON.stringify(choices));
+  } catch { /* The choice still applies to the open page. */ }
 }
 function validateSupabaseConfig(config) {
   const url = new URL(config.url);
@@ -100,4 +126,4 @@ function createLiveClient(base, options = {}) {
     }
   };
 }
-export { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, discoverSyncBase, createLiveClient, validateSupabaseConfig, syncIdentity };
+export { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, saveViewerPalette, discoverSyncBase, createLiveClient, validateSupabaseConfig, syncIdentity };

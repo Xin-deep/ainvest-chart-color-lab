@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createSyncServer } from '../scripts/sync-server.mjs';
 import { presets } from '../dist/data/presets.js';
-import { createLiveClient, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, discoverSyncBase } from '../dist/lib/live-sync.js';
+import { createLiveClient, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, saveViewerPalette, discoverSyncBase } from '../dist/lib/live-sync.js';
 const token = 'a'.repeat(64);
 const snapshot = () => ({ baseline: structuredClone(presets[0]), draft: structuredClone(presets[0]), aimeBoard: { catalogVersion: 3, platform: 'mobile', columns: 1, density: 'compact', modules: [{ id: 'chart-one', type: 'line-multi', count: 12, series: 3, fixture: 'aime-growth' }] }, theme: 'light', mode: 'draft', globalChartStyle: { lineWidth: 'inherit', texture: 'inherit' } });
 async function fixture(t) {
@@ -118,4 +118,33 @@ test('the same browser reuses its active fixed link and an explicit copy starts 
   assert.equal(readActiveOwner(oldStorage, base), id); // Upgrade reuses an existing fixed link.
   clearActiveOwner(oldStorage, base);
   assert.equal(readActiveOwner(oldStorage, base), null); // Explicit copy keeps its own new link.
+});
+
+test('viewer theme choice is stored locally, ignores invalid values and survives unavailable storage', () => {
+  const values = new Map();
+  const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  assert.equal(readViewerTheme(storage), null);
+  saveViewerTheme(storage, 'dark');
+  assert.equal(readViewerTheme(storage), 'dark');
+  for (const key of values.keys()) values.set(key, 'sepia');
+  assert.equal(readViewerTheme(storage), null);
+  const blocked = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
+  assert.equal(readViewerTheme(blocked), null);
+  assert.doesNotThrow(() => saveViewerTheme(blocked, 'dark'));
+});
+
+test('viewer palette choice is kept per link, can be cleared and tolerates corrupt or blocked storage', () => {
+  const values = new Map();
+  const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  assert.equal(readViewerPalette(storage, 'one'), null);
+  saveViewerPalette(storage, 'one', 'claude');
+  assert.equal(readViewerPalette(storage, 'one'), 'claude');
+  assert.equal(readViewerPalette(storage, 'two'), null);
+  saveViewerPalette(storage, 'one', null);
+  assert.equal(readViewerPalette(storage, 'one'), null);
+  for (const key of values.keys()) values.set(key, '{broken');
+  assert.equal(readViewerPalette(storage, 'one'), null);
+  const blocked = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
+  assert.equal(readViewerPalette(blocked, 'one'), null);
+  assert.doesNotThrow(() => saveViewerPalette(blocked, 'one', 'claude'));
 });
