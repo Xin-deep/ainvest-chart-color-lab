@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeColor, hsvToHex, hexToHsv } from '../dist/lib/colors.js';
-import { parseImport, validatePalette, createPalette } from '../dist/lib/palettes.js';
+import { parseImport, validatePalette, createPalette, restorePalette, restoreSavedPalettes } from '../dist/lib/palettes.js';
 import { presets } from '../dist/data/presets.js';
 
 test('normalize supported color formats without silently clipping invalid colors', () => {
@@ -65,13 +65,40 @@ test('plain text palettes preserve order, support mixed separators and independe
   for(const [a,b] of [['',''],['#fff','broken'],['#fff invalid',''],[Array(65).fill('#fff').join(' '),'']])assert.throws(()=>parseTextPalette(a,b));
 });
 
-test('brand palette placeholders are selectable, valid and share one neutral stand-in', () => {
+test('brand palettes use the supplied values and backgrounds', () => {
   assert.deepEqual(presets.map(p => p.name), ['Ainvest 原始色板', 'Claude 色板', 'TradingView 色板', 'Simply Wall St 色板', 'Robinhood 色板']);
   assert.equal(new Set(presets.map(p => p.id)).size, presets.length);
   assert.ok(!presets.some(p => ['finary', 'robinhood', 'wealthsimple'].includes(p.id)), 'retired ids are reset to the default palette on load');
-  for (const palette of presets.slice(1)) {
-    assert.match(palette.source, /占位/);
-    assert.equal(validatePalette(palette).themes.dark.categorical.length, 7);
-    assert.deepEqual(palette.themes.light.categorical, presets[1].themes.light.categorical);
+  const byId = Object.fromEntries(presets.map(p => [p.id, p])), hex = list => list.map(c => c.hex);
+  assert.deepEqual(hex(byId.claude.themes.light.categorical), ['#2A78D6', '#EB6834', '#1BAF7A', '#EDA100', '#E87BA4', '#008300', '#4A3AA7', '#E34948']);
+  assert.deepEqual(hex(byId.claude.themes.dark.categorical), ['#3987E5', '#D95926', '#199E70', '#C98500', '#D55181', '#008300', '#9085E9', '#E66767']);
+  assert.deepEqual(hex(byId.tradingview.themes.dark.categorical), hex(byId.tradingview.themes.light.categorical));
+  assert.deepEqual(hex(byId.tradingview.themes.dark.semantic), ['#089981', '#F23645']);
+  assert.equal(byId['robinhood-brand'].themes.light.categorical.length, 11);
+  assert.equal(byId['robinhood-brand'].themes.dark.categorical[1].hex, '#AF95F8');
+  assert.deepEqual(hex(byId['robinhood-brand'].themes.light.semantic), ['#00C000', '#FF3800']);
+  assert.deepEqual(hex(byId['robinhood-brand'].themes.dark.semantic), ['#00C805', '#FF5000']);
+  assert.deepEqual(hex(byId['simply-wall-st'].themes.light.categorical), ['#1D96DC', '#19B299', '#BA4986', '#E6B068', '#9F50E7']);
+  assert.deepEqual(hex(byId['simply-wall-st'].themes.dark.categorical), ['#1D96DC', '#73E6D5', '#BA4986', '#E6B068', '#9F50E7']);
+  assert.deepEqual(hex(byId['simply-wall-st'].themes.light.semantic), ['#12A15B', '#E74142']);
+  assert.deepEqual(hex(byId['simply-wall-st'].themes.dark.semantic), ['#2EC87C', '#E74142']);
+  for (const [id, light, dark] of [['claude', '#FFFFFF', '#191919'], ['tradingview', '#FFFFFF', '#000000'], ['simply-wall-st', '#EFECE6', '#212121'], ['robinhood-brand', '#FFFFFF', '#000000']]) {
+    assert.deepEqual(hex(byId[id].themes.light.surface).slice(0, 2), [light, light]);
+    assert.deepEqual(hex(byId[id].themes.dark.surface).slice(0, 2), [dark, dark]);
+    assert.equal(validatePalette(byId[id]).themes.dark.surface[0].hex, dark);
   }
+  assert.equal(presets[0].themes.light.surface[0].hex, '#F5F5F6');
+});
+test('shared palettes keep their identity so they match their tab again', () => {
+  assert.equal(restorePalette(presets[1], presets).id, 'claude');
+  const polluted = { ...structuredClone(presets[0]), id: 'imported' };
+  assert.equal(restorePalette(polluted, presets).id, 'ainvest');
+  assert.equal(restorePalette({ ...structuredClone(presets[0]), id: 'imported', name: '别的方案' }, presets).id, 'imported');
+});
+test('saved palettes from a snapshot drop invalid or anonymous entries and tolerate old snapshots', () => {
+  assert.deepEqual(restoreSavedPalettes(undefined), []);
+  const good = { ...structuredClone(presets[0]), id: 'plan-a', name: '方案 A' };
+  const restored = restoreSavedPalettes([good, { id: 'broken' }, { ...good, id: 'imported' }]);
+  assert.deepEqual(restored.map(p => p.id), ['plan-a']);
+  assert.equal(restoreSavedPalettes(Array.from({ length: 40 }, (_, i) => ({ ...good, id: 'plan-' + i }))).length, 30);
 });

@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename, readdir } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
-import { validatePalette } from '../dist/lib/palettes.js';
+import { restorePalette, restoreSavedPalettes } from '../dist/lib/palettes.js';
 import { normalizeGlobalChartStyle } from '../dist/lib/chart-style.js';
 const ID = /^[A-Za-z0-9_-]{32}$/;
 const TOKEN = /^[a-f0-9]{64}$/;
@@ -12,7 +12,7 @@ function normalizeSnapshot(input) {
   for (const module of input.aimeBoard.modules) {
     if (!module || typeof module.type !== 'string' || !/^[\w-]{1,80}$/.test(module.id) || !/^[\w-]{1,80}$/.test(module.type)) throw new Error('无效的图表模块');
   }
-  return { version: 1, baseline: validatePalette(input.baseline), draft: validatePalette(input.draft), aimeBoard: input.aimeBoard, theme: input.theme === 'dark' ? 'dark' : 'light', mode: input.mode === 'baseline' ? 'baseline' : 'draft', globalChartStyle: normalizeGlobalChartStyle(input.globalChartStyle) };
+  return { version: 1, baseline: restorePalette(input.baseline), draft: restorePalette(input.draft), saved: restoreSavedPalettes(input.saved), aimeBoard: input.aimeBoard, theme: input.theme === 'dark' ? 'dark' : 'light', mode: input.mode === 'baseline' ? 'baseline' : 'draft', globalChartStyle: normalizeGlobalChartStyle(input.globalChartStyle) };
 }
 const hash = token => createHash('sha256').update(token).digest('hex');
 export function createSyncServer({ root = resolve('dist'), dataDir = resolve('.data/live-sessions'), allowedOrigins = [] } = {}) {
