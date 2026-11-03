@@ -19,7 +19,7 @@ import { financialChartModules, financialModulesFor } from './data/financial-sha
 
 import { defaultFinancialBoard, validateFinancialBoard, renderFinancialExtras } from './scenes/financial-extras.js';
 
-const VERSION = '0.18.0';
+const VERSION = '0.18.1';
 const STORAGE_KEY = 'ainvest-palette-lab:v1';
 const scenes = [
   { id: 'aime', name: 'Aime 对话', en: 'Aime conversation', icon: 'chat' },
@@ -288,7 +288,7 @@ function undoDeletePalette(){
   persist();render();toast('已恢复方案');
 }
 function remember(snapshot = state.draft) { history.push(clone(snapshot)); if (history.length > 60) history.shift(); future = []; }
-const changedCount = () => countColorChanges(state.baseline, state.draft);
+function changedCount() { return countColorChanges(state.baseline, state.draft); }
 // History and the baseline hold colors only; the open palette keeps its own id and name.
 const onOpenPalette = snapshot => ({ ...clone(snapshot), id: state.draft.id, name: state.draft.name });
 function restoreOriginal() {
