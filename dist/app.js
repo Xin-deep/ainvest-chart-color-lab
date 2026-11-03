@@ -19,7 +19,7 @@ import { financialChartModules, financialModulesFor } from './data/financial-sha
 
 import { defaultFinancialBoard, validateFinancialBoard, renderFinancialExtras } from './scenes/financial-extras.js';
 
-const VERSION = '0.17.0';
+const VERSION = '0.17.1';
 const STORAGE_KEY = 'ainvest-palette-lab:v1';
 const scenes = [
   { id: 'financial', name: '财报分析', en: 'Financial analysis', icon: 'file' },
@@ -82,8 +82,10 @@ function refreshUneditedPreset() {
   if (preset && !changedCount()) { state.baseline = clone(preset); state.draft = clone(preset); }
 }
 refreshUneditedPreset();
-const mobileEntry = document.body.dataset.mobilePreview === 'true';
-// The phone entry only ever shows the Aime conversation; other scenes stay on the website.
+// Touch-only and phone-sized, so a narrow window on a computer can still edit.
+const isPhone = matchMedia('(hover: none) and (pointer: coarse)').matches && Math.min(screen.width, screen.height) <= 650;
+const mobileEntry = document.body.dataset.mobilePreview === 'true' || isPhone;
+// The phone entry only ever shows the Aime conversation, read-only; other scenes and editing stay on the website.
 const requestedScene = mobileEntry ? 'aime' : new URLSearchParams(location.search).get('scene');
 if (scenes.some(s => s.id === requestedScene)) state.scene = requestedScene;
 let mobileShareError = '', sharedPreviewLoaded = false;
@@ -102,7 +104,7 @@ if (mobileEntry || (state.scene === 'aime' && innerWidth <= 650)) { state.collap
 const isMobileAime = () => state.scene === 'aime' && (mobileEntry || innerWidth <= 650);
 const liveParams = new URLSearchParams(location.search);
 const requestedLiveId = liveParams.get('live') || liveParams.get('edit');
-const live = { role: requestedLiveId ? 'viewer' : null, id: requestedLiveId, loading: !!requestedLiveId, ready: false, client: null, base: null, token: null, revision: 0, status: requestedLiveId ? '正在连接共享方案…' : '', error: '', pending: null, writing: false, lastJSON: '', timer: null, retry: null, stop: null, generation: 0, conflict: false, viewerTheme: null, viewerPalette: null, sharedPalettes: [] };
+const live = { role: requestedLiveId || mobileEntry ? 'viewer' : null, id: requestedLiveId, loading: !!requestedLiveId, ready: mobileEntry && !requestedLiveId, client: null, base: null, token: null, revision: 0, status: requestedLiveId ? '正在连接共享方案…' : '', error: '', pending: null, writing: false, lastJSON: '', timer: null, retry: null, stop: null, generation: 0, conflict: false, viewerTheme: null, viewerPalette: null, sharedPalettes: [] };
 const isLiveReadOnly = () => live.role === 'viewer' || live.loading;
 if (requestedLiveId) { state.scene = 'aime'; state.collapsed = true; state.previewFullscreen = false; }
 function liveSnapshot() { return { baseline: state.baseline, draft: state.draft, saved: state.saved, aimeBoard: state.aimeBoard, theme: state.theme, mode: state.mode, globalChartStyle: state.globalChartStyle }; }
@@ -117,6 +119,8 @@ function keepViewerTheme() {
   live.viewerTheme ||= readViewerTheme(localStorage) || (['light', 'dark'].includes(requestedTheme) ? requestedTheme : state.theme);
   state.theme = live.viewerTheme;
 }
+// Without a fixed link, phones read local colors or a static snapshot the same way.
+if (mobileEntry && !requestedLiveId) { live.sharedPalettes = state.saved; keepViewerTheme(); }
 // Phone viewers read connection state from the dot; the bar only carries errors they can act on.
 const liveBarHidden = () => live.role === 'viewer' && isMobileAime() ? !live.error : isQuietLiveStatus(live.status) && !live.error && !live.conflict;
 const liveDotClass = () => !live.ready && !live.error ? 'is-pending' : isQuietLiveStatus(live.status) && !live.error ? 'is-connected' : 'is-disconnected';
@@ -165,7 +169,7 @@ async function connectLive({ throwOnError = false, keepLocal = false } = {}) {
     live.base = await discoverSyncBase(); live.client = createLiveClient(live.base);
     const record = await live.client.get(live.id);
     if (generation !== live.generation) return;
-    const token = new URLSearchParams(location.search).has('edit') ? readOwner(localStorage, live.base, live.id) : null;
+    const token = !mobileEntry && new URLSearchParams(location.search).has('edit') ? readOwner(localStorage, live.base, live.id) : null;
     // Sharing again publishes what the owner is looking at instead of restoring the stored copy.
     const publishLocal = keepLocal && !!token;
     if (!publishLocal) applyLiveSnapshot(record.snapshot);
@@ -183,7 +187,7 @@ async function connectLive({ throwOnError = false, keepLocal = false } = {}) {
   } catch (error) { if (generation !== live.generation) return; live.loading = false; live.error = error.message; liveStatus(error.message); render(); if (throwOnError) throw error; }
 }
 async function ensureLiveOwner() {
-  if (live.role === 'viewer' || live.loading) throw new Error('此方案只读，请先复制为自己的方案');
+  if (live.role === 'viewer' || live.loading) throw new Error('此方案只读，不能编辑');
   if (live.role === 'owner' && live.ready) return;
   const base = await discoverSyncBase();
   const activeId = readActiveOwner(localStorage, base);
@@ -322,7 +326,7 @@ function render() {
   app.innerHTML = `<main class="app-shell two-pane ${mobileAime ? 'aime-mobile' : ''} ${readOnly ? 'live-viewer' : ''} ${readOnly && !live.ready ? 'live-unavailable' : ''} ${state.collapsed ? 'panel-collapsed' : ''} ${state.previewFullscreen ? 'preview-fullscreen' : ''}">
     ${state.previewFullscreen ? `<button class="button fullscreen-exit" data-action="exit-fullscreen" aria-label="退出全屏预览">${icon('close')}退出全屏 <kbd>Esc</kbd></button>` : ''}
     ${state.collapsed && !state.previewFullscreen && !mobileAime ? `<button class="icon-button workbench-launcher" data-action="collapse" aria-label="展开颜色工作台" title="展开颜色工作台" aria-expanded="false">${icon('panel')}</button>` : ''}
-    ${mobileAime ? `<nav class="aime-preview-controls" aria-label="手机预览工具">${readOnly ? `${liveDot()}${live.ready ? viewerPaletteBar() : '<div class="aime-viewer-palettes"></div>'}` : '<span>Aime 预览</span>'}<button data-action="theme" data-value="${state.theme==='light'?'dark':'light'}" aria-label="切换到${state.theme==='light'?'深色':'浅色'}主题" ${readOnly&&!live.ready?'disabled':''}>${icon(state.theme==='light'?'moon':'sun')}</button>${readOnly ? `<button data-action="live-copy" aria-label="复制为我的方案" title="复制为我的方案" ${!live.ready?'disabled':''}>${icon('copy')}</button>` : `<button data-action="share-mobile">分享</button><button data-action="collapse" aria-expanded="${!state.collapsed}" aria-controls="color-workbench">调色</button>`}</nav>` : ''}
+    ${mobileAime ? `<nav class="aime-preview-controls" aria-label="手机预览工具">${readOnly ? `${live.id ? liveDot() : ''}${live.ready ? viewerPaletteBar() : '<div class="aime-viewer-palettes"></div>'}` : '<span>Aime 预览</span>'}<button data-action="theme" data-value="${state.theme==='light'?'dark':'light'}" aria-label="切换到${state.theme==='light'?'深色':'浅色'}主题" ${readOnly&&!live.ready?'disabled':''}>${icon(state.theme==='light'?'moon':'sun')}</button>${readOnly ? '' : `<button data-action="share-mobile">分享</button><button data-action="collapse" aria-expanded="${!state.collapsed}" aria-controls="color-workbench">调色</button>`}</nav>` : ''}
     ${live.role ? `<div class="live-sync-bar" ${liveBarHidden()?'hidden':''}><span class="live-sync-status" role="status">${esc(live.status)}</span>${live.error||live.conflict?'<button data-action="live-reload">重新载入</button>':''}${live.role==='owner'?'<button data-action="live-copy">复制为新方案</button>':''}</div>` : ''}
     <div class="workspace">
       ${readOnly && !live.ready ? `<div class="live-viewer-notice"><p>${esc(live.error || '正在载入共享方案…')}</p>${live.error?'<button class="button" data-action="live-reload">重试</button>':''}</div>` : ''}
@@ -634,9 +638,8 @@ app.addEventListener('keydown', event => {
 function copyLiveSession() {
   if (!live.ready) return;
   clearActiveOwner(localStorage, live.base);
-  const picked = viewerPick();
-  if (picked) { state.baseline = clone(picked); state.draft = clone(picked); }
-  detachLive(); historyReplaceLive(new URL('aime.html', location.href));
+  detachLive();
+  const url = new URL(location.href); url.searchParams.delete('edit'); url.hash = ''; historyReplaceLive(url);
   state.baseline.id = crypto.randomUUID(); state.draft.id = state.baseline.id; state.draft.name += ' · 我的副本'; state.collapsed = false; state.editorOpen = false; history = []; future = [];
   persist(); render(); toast('已复制为独立方案，不会修改原方案');
 }
@@ -652,7 +655,8 @@ app.addEventListener('click', async e => {
   if (liveAction === 'viewer-palette' && live.role === 'viewer' && live.ready) {
     const value = e.target.closest('[data-action]').dataset.value;
     live.viewerPalette = value === ownerTabId() ? null : value;
-    saveViewerPalette(localStorage, live.id, live.viewerPalette); render(); return;
+    if (live.id) saveViewerPalette(localStorage, live.id, live.viewerPalette);
+    render(); return;
   }
   if (isLiveReadOnly()) return;
   const card=e.target.closest('[data-module-id]'),cardAction=e.target.closest('[data-action]');
@@ -669,7 +673,7 @@ app.addEventListener('click', async e => {
   if (action === 'fullscreen' || action === 'exit-fullscreen') { await setPreviewFullscreen(action === 'fullscreen'); return; }
   if (action === 'share-mobile') {
     if (!/^https?:$/.test(location.protocol)) { toast('请通过已部署的网址分享，离线文件可导出实验 JSON'); return; }
-    openModal(`${modalHead('分享手机预览')}<p>固定链接只读，电脑改色后自动同步。查看者需复制为自己的方案才能编辑。</p><button class="button primary" data-modal-action="live-share">${live.role==='owner'?'复制固定链接':'获取固定链接'}</button><p class="editor-footnote">${live.role==='owner'?'编辑权限只保存在创建方案的浏览器中。':'同一浏览器会复用上次创建的链接；首次使用才新建。'}</p><button class="button" data-modal-action="snapshot-share">分享静态快照</button><p class="editor-footnote">静态快照可在现有 GitHub Pages 使用；后续改色仍需重新分享。</p>${live.role==='owner'?'<button class="button" data-modal-action="live-copy">复制为新方案</button><p class="editor-footnote">生成独立副本，之后可创建新的固定链接，不影响当前链接。</p>':''}`);
+    openModal(`${modalHead('分享手机预览')}<p>固定链接只读，电脑改色后自动同步。查看者只能切换主题和色板，不能编辑。</p><button class="button primary" data-modal-action="live-share">${live.role==='owner'?'复制固定链接':'获取固定链接'}</button><p class="editor-footnote">${live.role==='owner'?'编辑权限只保存在创建方案的浏览器中。':'同一浏览器会复用上次创建的链接；首次使用才新建。'}</p><button class="button" data-modal-action="snapshot-share">分享静态快照</button><p class="editor-footnote">静态快照可在现有 GitHub Pages 使用；后续改色仍需重新分享。</p>${live.role==='owner'?'<button class="button" data-modal-action="live-copy">复制为新方案</button><p class="editor-footnote">生成独立副本，之后可创建新的固定链接，不影响当前链接。</p>':''}`);
     return;
   }
   if (action === 'scene') { state.scene = value; state.editorOpen = false; }
