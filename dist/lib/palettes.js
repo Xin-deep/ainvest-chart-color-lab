@@ -49,6 +49,31 @@ export function restoreSavedPalettes(list) {
     try { const palette = restorePalette(item); return palette.id === 'imported' ? [] : [palette]; } catch { return []; }
   });
 }
+// Preset edits are stored per preset id; entries for unknown ids or broken colors are dropped.
+export function restorePresetEdits(input, knownIds) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+  return Object.fromEntries(Object.entries(input).slice(0, 30).flatMap(([id, item]) => {
+    if (knownIds && !knownIds.includes(id)) return [];
+    try { return [[id, { ...restorePalette(item), id }]]; } catch { return []; }
+  }));
+}
+export function countColorChanges(a, b) {
+  let count = 0;
+  for (const theme of ['light', 'dark']) for (const role of Object.keys(roles)) {
+    const before = a.themes[theme][role], after = b.themes[theme][role];
+    for (let i = 0; i < Math.max(before.length, after.length); i++) if (before[i]?.hex !== after[i]?.hex) count++;
+  }
+  return count;
+}
+// Edits stay on the palette they were made on: schemes update in place, presets keep a separate overlay.
+export function writeBackDraft({ draft, saved, presetEdits }, presets) {
+  const index = saved.findIndex(p => p.id === draft.id);
+  if (index >= 0) { saved[index] = clone(draft); return; }
+  const preset = presets.find(p => p.id === draft.id);
+  if (!preset) return;
+  if (countColorChanges(preset, draft)) presetEdits[draft.id] = clone(draft);
+  else delete presetEdits[draft.id];
+}
 // A position is one series in both themes, so structure edits apply to light and dark together.
 const categoricalLists = palette => ['light', 'dark'].map(theme => palette.themes[theme].categorical);
 export function moveCategoricalColor(palette, from, to) {

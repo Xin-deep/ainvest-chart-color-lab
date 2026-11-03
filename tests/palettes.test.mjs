@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeColor, hsvToHex, hexToHsv } from '../dist/lib/colors.js';
-import { parseImport, validatePalette, createPalette, restorePalette, restoreSavedPalettes, moveCategoricalColor, removeCategoricalColor, addCategoricalColor, indexAfterMove } from '../dist/lib/palettes.js';
+import { parseImport, validatePalette, createPalette, restorePalette, restoreSavedPalettes, restorePresetEdits, countColorChanges, writeBackDraft, moveCategoricalColor, removeCategoricalColor, addCategoricalColor, indexAfterMove } from '../dist/lib/palettes.js';
 import { presets } from '../dist/data/presets.js';
 
 test('normalize supported color formats without silently clipping invalid colors', () => {
@@ -139,4 +139,48 @@ test('adding to a gray palette still produces a visible color', () => {
   addCategoricalColor(palette);
   const added = palette.themes.light.categorical[1].hex;
   assert.notEqual(added, '#808080'); assert.match(added, /^#[0-9A-F]{6}$/);
+});
+
+test('edits write back to the open palette without adding entries', () => {
+  const scheme = { ...structuredClone(presets[1]), id: 'plan-a', name: '方案 A' };
+  const state = { draft: structuredClone(scheme), saved: [scheme], presetEdits: {} };
+  state.draft.themes.light.categorical[0].hex = '#123456';
+  writeBackDraft(state, presets);
+  assert.equal(state.saved.length, 1);
+  assert.equal(state.saved[0].themes.light.categorical[0].hex, '#123456');
+  assert.deepEqual(state.presetEdits, {});
+  assert.notEqual(state.saved[0], state.draft);
+});
+test('preset edits stay in an overlay, leave the preset alone and clear when undone', () => {
+  const original = presets[0].themes.light.categorical[0].hex;
+  const state = { draft: structuredClone(presets[0]), saved: [], presetEdits: {} };
+  state.draft.themes.light.categorical[0].hex = '#123456';
+  writeBackDraft(state, presets);
+  assert.equal(state.saved.length, 0);
+  assert.equal(state.presetEdits.ainvest.themes.light.categorical[0].hex, '#123456');
+  assert.equal(presets[0].themes.light.categorical[0].hex, original);
+  state.draft.themes.light.categorical[0].hex = original;
+  writeBackDraft(state, presets);
+  assert.deepEqual(state.presetEdits, {});
+});
+test('a draft outside the lists is left for the app to adopt', () => {
+  const state = { draft: { ...structuredClone(presets[0]), id: 'session-copy' }, saved: [], presetEdits: {} };
+  writeBackDraft(state, presets);
+  assert.equal(state.saved.length, 0);
+  assert.deepEqual(state.presetEdits, {});
+});
+test('stored preset edits drop unknown ids, broken colors and old snapshots', () => {
+  const good = structuredClone(presets[0]);
+  assert.deepEqual(restorePresetEdits(undefined), {});
+  assert.deepEqual(restorePresetEdits([good]), {});
+  const restored = restorePresetEdits({ ainvest: good, retired: good, claude: { id: 'claude' } }, ['ainvest', 'claude']);
+  assert.deepEqual(Object.keys(restored), ['ainvest']);
+  assert.equal(restored.ainvest.id, 'ainvest');
+});
+test('color changes count every role in both themes and added colors', () => {
+  const a = structuredClone(presets[0]), b = structuredClone(a);
+  assert.equal(countColorChanges(a, b), 0);
+  b.themes.dark.surface[0].hex = '#000001';
+  addCategoricalColor(b);
+  assert.equal(countColorChanges(a, b), 3);
 });
