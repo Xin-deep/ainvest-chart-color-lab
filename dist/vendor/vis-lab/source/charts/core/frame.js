@@ -82,6 +82,9 @@ export function createFrame(host, opts = {}) {
        无轴图（饼环）应传 0 —— 它的画布边长是调用方按图元算好的（PIE-02 的 2R），
        被这个下限抬高只会在图元四周多出死空间，而那正是 PIE-09 要求恒定的那段间距的来源。 */
     minGridHeight = 48,
+    /* 复用已有画布、只更新尺寸：画布里有可聚焦节点时，整块重建会把键盘焦点丢回 body。
+       默认不传 = 新建，既有调用方不变。 */
+    svg: reuseSvg,
   } = opts;
   /* 240 是**自动取宽**时的下限：轴图靠容器宽度决定画布，容器还没布局好时会量到 0，
      兜一个最小可用宽度免得刻度/标签挤成一团。
@@ -122,7 +125,7 @@ export function createFrame(host, opts = {}) {
 
   const H = topPad + gridH + bottomPad + navH;
 
-  const svg = select(host).append('svg').attr('width', W).attr('height', H).attr('role', 'img');
+  const svg = (reuseSvg ?? select(host).append('svg')).attr('width', W).attr('height', H).attr('role', 'img');
 
   const grid = {
     left: pad.left,
@@ -168,6 +171,16 @@ export const containerDrivesHeight = (hostHeight) => Number(hostHeight) >= CONTA
 /* resize 时：这次变高是不是**外部**造成的（1px 容差吸收亚像素抖动） */
 export const containerTookOver = (hostHeight, baseline) => Math.abs(hostHeight - baseline) > 1;
 
+/* [GRID-03] 容器塌陷时「下一帧再 build」的重试。必须持有帧 id：build 开头撤掉排队中的重试，
+ * 否则 resize 与重试会各跑一条循环；destroy 也要撤，否则卸载后容器恒为 0，循环永不停止。 */
+export function createBuildRetry(build) {
+  let raf = 0;
+  return {
+    schedule() { raf = requestAnimationFrame(() => build()); },
+    cancel() { cancelAnimationFrame(raf); },
+  };
+}
+
 /* [GRID-03] 容器尺寸自适应：宽/高变化（rAF 合帧）后回调重建 */
 export function observeResize(host, cb) {
   let raf = 0;
@@ -181,5 +194,9 @@ export function observeResize(host, cb) {
     raf = requestAnimationFrame(cb);
   });
   ro.observe(host);
-  return () => ro.disconnect();
+  /* 排队中的 rAF 也要撤：否则销毁后还会回调一次，把图重建到已卸载的节点上。 */
+  return () => {
+    cancelAnimationFrame(raf);
+    ro.disconnect();
+  };
 }

@@ -10,7 +10,7 @@
  * 语义分档阈值由业务配置提供。
  */
 import { hierarchy, select, treemap, treemapDice, treemapSlice, treemapSquarify } from 'd3';
-import { createFrame, observeResize, containerDrivesHeight, containerTookOver } from '../../core/frame.js';
+import { createFrame, observeResize, containerDrivesHeight, containerTookOver, createBuildRetry } from '../../core/frame.js';
 import {
   createHighlightState, applyHover, applyLeave, applyPick, activeTarget,
 } from '../../core/highlight-state.js';
@@ -102,6 +102,7 @@ export function TreemapChart(host, cfg) {
     colorThresholds,
     platform = 'pc',
     animation = true,
+    showImage = false,
   } = cfg;
   if (!root || typeof root !== 'object') throw new TypeError('TreemapChart：root 必须是层级对象');
   if (!['squarify', 'horizontal', 'vertical'].includes(direction)) {
@@ -146,7 +147,9 @@ export function TreemapChart(host, cfg) {
   let stopGrow = () => {};
   let stopHover = () => {};
 
+  const buildRetry = createBuildRetry(build);
   function build(forceMotion = false) {
+    buildRetry.cancel();
     stopGrow();
     stopHover();
     stopGrow = () => {};
@@ -162,12 +165,12 @@ export function TreemapChart(host, cfg) {
       useContainerHeight: usesContainerHeight,
     });
     /* [TREEMAP-08] 容器塌到不可用高度时**推迟到下一帧重画**，不抛错——与 cartesian / pie
-       同一处置（那两族用的是 `clientHeight < 40 → requestAnimationFrame(build)`）。
+       同一处置（都走 L1 `createBuildRetry`）。
        容器高在真实页面里会短暂为 0（标签页切换、折叠面板展开、懒布局首帧），
        那不是配置错误，抛异常会把整张图打没且不会自己回来。
        **仅当「既没有容器高、主题也没给兜底」时才抛**——那才是真正的配置缺失，要当场看见。 */
     if (!(plotHeight > 0)) {
-      if (usesContainerHeight) return requestAnimationFrame(build);
+      if (usesContainerHeight) return buildRetry.schedule();
       throw new Error('TreemapChart：外层容器必须提供有效高度，或主题需提供 --size-chart-region-height');
     }
     const width = Math.max(1, plotHost.clientWidth || host.clientWidth);
@@ -193,7 +196,7 @@ export function TreemapChart(host, cfg) {
     if (!ITEM_COLOR_MODES.includes(activeColorMode)) {
       throw new Error('TreemapChart：treemap-profile.color-mode 不是受支持的颜色模式');
     }
-    items.forEach((item) => { item.presentation = itemPresentation(item); });
+    items.forEach((item) => { item.presentation = itemPresentation(item, { showImage }); });
     const assignments = resolveItemColors({
       mode: activeColorMode,
       values: items.map((item) => item.value),
@@ -456,6 +459,7 @@ export function TreemapChart(host, cfg) {
   });
   return {
     destroy() {
+      buildRetry.cancel();
       stopGrow();
       stopHover();
       stopResize();

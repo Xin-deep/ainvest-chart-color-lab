@@ -38,7 +38,7 @@ test('Aime console values match the conversation styles',async()=>{
 });
 test('Aime uses five shared chart types with independent mobile scene state',()=>{
  const board=defaultAimeBoard(),other=defaultCompactBoard();
- assert.equal(board.platform,'mobile');assert.equal(board.modules.length,5);assert.equal(other.modules.length,25);
+ assert.equal(board.platform,'mobile');assert.equal(board.modules.length,5);assert.equal(other.modules.length,26);
  assert.deepEqual(board.modules.map(m=>m.type),['line-multi','market-cap-race','donut','stack','grouped3']);
  const html=renderAimeScene(board,'dark');assert.match(html,/data-aime-theme="dark"/);assert.match(html,/Fundamentals remain rock-solid/);assert.equal((html.match(/data-chart-id=/g)||[]).length,5);
 });
@@ -53,7 +53,7 @@ test('new chart modules and fixtures survive full experiment import without poll
  const aime=defaultAimeBoard();aime.modules.push(newCompactModule('radar-basic'));aime.density='standard';
  const parsed=parseImport(JSON.stringify({kind:'palette-lab-session',schemaVersion:1,baseline:presets[0],draft:presets[0],scene:'aime',aimeBoard:aime}));
  const restored=validateAimeBoard(parsed.session.aimeBoard);assert.equal(restored.modules.length,6);assert.equal(restored.platform,'mobile');assert.equal(restored.density,'standard');assert.equal(restored.modules[0].fixture,'aime-growth');assert.equal(restored.modules[1].count,2);
- assert.equal(defaultCompactBoard().modules.length,25);
+ assert.equal(defaultCompactBoard().modules.length,26);
  const empty=validateAimeBoard({...aime,modules:[]});assert.equal(empty.modules.length,0);
 });
 

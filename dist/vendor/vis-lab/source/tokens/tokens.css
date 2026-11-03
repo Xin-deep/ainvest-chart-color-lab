@@ -111,6 +111,20 @@
   --opacity-visualization-intensity-level-3: 0.75;
   --opacity-visualization-intensity-level-4: 0.85;
   --opacity-visualization-intensity-level-5: 1;
+  --color-world-heatmap-primary: #3366FF;
+  --color-world-heatmap-up: var(--color-price-up);
+  --color-world-heatmap-down: var(--color-price-down);
+  --color-world-heatmap-empty: rgba(0, 0, 0, 0.05);
+  --color-world-heatmap-border: #FFFFFF;
+  --color-world-heatmap-highlight: var(--color-text-primary);
+  --opacity-world-heatmap-level-1: 0.1;
+  --opacity-world-heatmap-level-2: 0.2;
+  --opacity-world-heatmap-level-3: 0.3;
+  --opacity-world-heatmap-level-4: 0.4;
+  --opacity-world-heatmap-level-5: 0.6;
+  --size-world-heatmap-border: 0.5px;
+  --size-world-heatmap-flag: 16px;
+  --size-world-heatmap-height: 240px;
   --font-size-tooltip: 12px;
   --font-family-tooltip: var(--font-family-cn);
   --font-weight-tooltip-value: var(--font-weight-medium);
@@ -162,6 +176,7 @@
   --color-grey-05: #858585;
   --size-chart-region-height: 160px;
   --size-chart-region-min-height: 0px;
+  --size-sankey-canvas-height: 0px;
   --size-chart-min-width: auto;
   --size-grid-line: 1px;
   --spacing-chart-region-gap: var(--spacing-8);
@@ -307,6 +322,8 @@
   --color-background-weak: rgba(255, 255, 255, 0.06);
   --color-visualization-highlight-line: rgba(255, 255, 255, 0.6);
   --color-visualization-highlight-block: rgba(255, 255, 255, 0.1);
+  --color-world-heatmap-empty: rgba(255, 255, 255, 0.06);
+  --color-world-heatmap-border: #0F0F0F;
   --color-text-legend: rgba(255, 255, 255, 0.6);
   --color-datazoom-data-bg: rgba(255, 255, 255, 0.12);
   --color-datazoom-handle: #3B3B3B;
@@ -426,6 +443,20 @@
   --opacity-visualization-intensity-level-3: 0.75;
   --opacity-visualization-intensity-level-4: 0.85;
   --opacity-visualization-intensity-level-5: 1;
+  --color-world-heatmap-primary: #4D5999;
+  --color-world-heatmap-up: var(--color-price-up);
+  --color-world-heatmap-down: var(--color-price-down);
+  --color-world-heatmap-empty: rgba(0, 0, 0, 0.05);
+  --color-world-heatmap-border: #FFFFFF;
+  --color-world-heatmap-highlight: var(--color-text-primary);
+  --opacity-world-heatmap-level-1: 0.1;
+  --opacity-world-heatmap-level-2: 0.2;
+  --opacity-world-heatmap-level-3: 0.3;
+  --opacity-world-heatmap-level-4: 0.4;
+  --opacity-world-heatmap-level-5: 0.6;
+  --size-world-heatmap-border: 0.5px;
+  --size-world-heatmap-flag: 16px;
+  --size-world-heatmap-height: 240px;
   --font-size-tooltip: 14px;
   --font-family-tooltip: Arial;
   --font-weight-tooltip-value: var(--font-weight-regular);
@@ -477,6 +508,7 @@
   --color-grey-05: #858585;
   --size-chart-region-height: 200px;
   --size-chart-region-min-height: 0px;
+  --size-sankey-canvas-height: 0px;
   --size-chart-min-width: auto;
   --size-grid-line: 1px;
   --spacing-chart-region-gap: var(--spacing-8);
@@ -625,6 +657,8 @@
   --color-visualization-highlight-block: rgba(255, 255, 255, 0.1);
   --color-visualization-highlight-background-tick: #4F4F5E;
   --color-text-highlight-tick: #E9E9F2;
+  --color-world-heatmap-empty: rgba(255, 255, 255, 0.06);
+  --color-world-heatmap-border: #0F0F0F;
   --color-text-legend: #D1D1E0;
   --color-datazoom-data-bg: rgba(255, 255, 255, 0.12);
   --color-datazoom-handle: #3371FF;
@@ -744,6 +778,20 @@
   --opacity-visualization-intensity-level-3: 0.75;
   --opacity-visualization-intensity-level-4: 0.85;
   --opacity-visualization-intensity-level-5: 1;
+  --color-world-heatmap-primary: #165DFF;
+  --color-world-heatmap-up: var(--color-price-up);
+  --color-world-heatmap-down: var(--color-price-down);
+  --color-world-heatmap-empty: rgba(0, 0, 0, 0.05);
+  --color-world-heatmap-border: #FFFFFF;
+  --color-world-heatmap-highlight: var(--color-text-primary);
+  --opacity-world-heatmap-level-1: 0.1;
+  --opacity-world-heatmap-level-2: 0.2;
+  --opacity-world-heatmap-level-3: 0.3;
+  --opacity-world-heatmap-level-4: 0.4;
+  --opacity-world-heatmap-level-5: 0.6;
+  --size-world-heatmap-border: 0.5px;
+  --size-world-heatmap-flag: 16px;
+  --size-world-heatmap-height: 240px;
   --font-size-tooltip: 12px;
   --font-family-tooltip: var(--font-family-en);
   --font-weight-tooltip-value: var(--font-weight-regular);
@@ -795,6 +843,7 @@
   --color-grey-05: #858585;
   --size-chart-region-height: 200px;
   --size-chart-region-min-height: 0px;
+  --size-sankey-canvas-height: 0px;
   --size-chart-min-width: auto;
   --size-grid-line: 1px;
   --spacing-chart-region-gap: var(--spacing-8);
@@ -954,6 +1003,8 @@
   --color-visualization-highlight-block: rgba(255, 255, 255, 0.1);
   --color-visualization-highlight-background-tick: #ffffff;
   --color-text-highlight-tick: #000000;
+  --color-world-heatmap-empty: rgba(255, 255, 255, 0.06);
+  --color-world-heatmap-border: #0F0F0F;
   --color-text-legend: rgba(255, 255, 255, 0.6);
   --color-datazoom-filler: rgba(255, 255, 255, 0.6);
   --color-datazoom-data-bg: rgba(255, 255, 255, 0.10);
@@ -983,6 +1034,7 @@
   --spacing-legend-container-v-bottom: var(--spacing-8);
   --size-chart-region-height: 140px;
   --size-chart-region-min-height: 100px;
+  --size-sankey-canvas-height: var(--size-chart-region-height);
   --size-chart-min-width: 300px;
   --spacing-axis-x-band-top: var(--spacing-2);
   --spacing-axis-x-band-bottom: var(--spacing-2);
@@ -991,6 +1043,7 @@
   --size-donut-ring-width: 24px;
   --size-line-point: 6px;
   --font-size-tooltip: 11px;
+  --size-world-heatmap-height: 140px;
 }
 
 [data-theme="ainvest"][data-density="compact"][data-platform="mobile"] {

@@ -51,7 +51,7 @@ test('shared financial charts retain monetary amounts, percentage units and orig
   assert.equal(trend.series[2].axis,'secondary');
   assert.equal(financialPercent(trend.series[2].data[0]),'84.4%');
   assert.equal(financialPercent(0),'0%');
-  assert.deepEqual(financialChartModules.find(m=>m.id==='financial-trend').colorSlots,[0,1,6]);
+  assert.deepEqual(financialChartModules.find(m=>m.id==='financial-trend').colorSlots,[0,1]);
   assert.equal(config('financial-breakdown').items[2].value,107.52e9);
   assert.ok(config('financial-yield').series[0].data.every(v=>v>0&&v<.0056));
   assert.ok(Math.abs(config('financial-business').items.reduce((sum,item)=>sum+item.value,0)-109.42e9)<=.011e9);

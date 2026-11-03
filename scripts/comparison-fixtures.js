@@ -1,8 +1,11 @@
 // Fixed upstream demos need genuinely different data volumes for the comparison pair.
 export function applyComparisonFixture(cfg,module){
  if(!['few','many'].includes(module.comparisonVariant))return cfg;
+ if(module.type==='world-heatmap-market')return {...cfg,regions:cfg.regions?.slice(0,module.count)};
  if(module.type==='sankey-financial'&&module.comparisonVariant==='few'){
-   return {...cfg,nodes:[
+   // The upstream sequence fields describe its own periods and would override these link values.
+   const {sequenceCanvasHeight,sequencePeakLinkValues,...base}=cfg;
+   return {...base,nodes:[
      {id:'business-a',name:'Core Business',role:'income',stage:0,order:0},
      {id:'business-b',name:'Other Business',role:'income',stage:0,order:1},
      {id:'revenue',name:'Revenue',role:'income',stage:1,order:0},

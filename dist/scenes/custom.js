@@ -61,7 +61,7 @@ function mountCompactBoard(root,board,palette,theme,onColor){
   for(const [key,hex] of Object.entries({bg:c.surface[0].hex,card:c.surface[1].hex,text:c.surface[2].hex,muted:c.surface[3].hex,line:c.surface[4].hex}))root.style.setProperty(`--compact-${key}`,hex);
   for(const target of root.querySelectorAll('[data-chart-id]')){
     const module=board.modules.find(v=>v.id===target.dataset.chartId);
-    try{compactInstances.push(globalThis.PaletteVisEngine.mountCompactChart(target,resolveChartStyle(module,board.globalChartStyle),palette,theme,index=>onColor(index,module.id),board.density,board.platform));}
+    try{compactInstances.push(globalThis.PaletteVisEngine.mountCompactChart(target,resolveChartStyle(module,board.globalChartStyle),palette,theme,(index,role)=>onColor(index,module.id,role),board.density,board.platform));}
     catch(error){target.textContent=`图表加载失败：${error.message}`;}
   }
 }
