@@ -34,7 +34,7 @@
       (function () {
         var params = new URLSearchParams(location.search), shared = params.has('live') || params.has('edit'), theme = params.get('theme');
         try {
-          theme = (shared && localStorage.getItem('ainvest-live-viewer-theme:v1')) || theme || (!shared && JSON.parse(localStorage.getItem('ainvest-palette-lab:v1') || '{}').theme);
+          theme = localStorage.getItem('ainvest-live-viewer-theme:v1') || theme || (!shared && JSON.parse(localStorage.getItem('ainvest-palette-lab:v1') || '{}').theme);
         } catch (error) { /* Storage can be blocked; the light skeleton still works. */ }
         if (theme === 'dark') document.documentElement.dataset.bootTheme = 'dark';
         if (shared) {

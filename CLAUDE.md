@@ -26,7 +26,7 @@ npm run build:preview  # 改完 dist/ 必须执行，并提交 preview.html
 
 - **本地测试会写线上：** `dist/sync-config.json` 已配置线上 Supabase，本地创建固定链接也会写入线上。测试分享功能时，在临时副本里把 `url` 和 `publishableKey` 留空，改走本地 Node 服务；不要提交清空后的配置。
 - **Pages 上线即公开：** 合并到 `main` 会直接发布，已保存方案也会随固定链接同步给查看者。
-- **手机页只有 Aime：** `aime.html` 只显示 Aime 对话，网址参数和导入文件都不能切到其他场景；其他场景只在网站上提供。
+- **手机端只读且只有 Aime：** `aime.html` 和手机打开网站时都只显示 Aime 对话，只能切换主题和色板，编辑链接也按只读处理。手机按「只支持触摸且短边不超过 650px」判断，电脑窄窗口和平板打开网站仍可编辑，`aime.html` 在任何设备上都只读。
 - **按需加载：** web 和 Terminal 场景在 `app.js` 里动态导入，不要改回静态导入。新增动态导入时要同步改 `scripts/build-preview.mjs`。
 - **预加载列表：** `aime.html` 列出了首屏模块，增删首屏模块要同步更新，`tests/aime-entry.test.mjs` 会检查。
 - **色板 id：** `robinhood`、`finary`、`wealthsimple` 是旧 id，载入时会被重置，新色板不能使用。
