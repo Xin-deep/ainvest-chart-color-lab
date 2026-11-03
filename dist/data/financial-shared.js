@@ -9,6 +9,9 @@ const financialChartModules=[
  {id:'financial-payout',type:'combo',fixture:'financial-payout',chartId:'dividend-payout',height:240,colorSlots:[0,1,6]},
  {id:'financial-yield',type:'line',fixture:'financial-yield',chartId:'dividend-yield',height:240,colorSlots:[6]}
 ].map(m=>({count:8,series:3,labels:'auto',...m}));
+// Cards have fixed heights, so low density adds the 60px gap between the Vis Lab plot heights (200 vs 140);
+// otherwise its larger legends would eat into the plot and read as the denser option.
+const financialModulesFor=density=>density==='standard'?financialChartModules.map(m=>typeof m.height==='number'&&m.chartId!=='technical-radar'&&m.chartId!=='investment-rating'?{...m,height:m.height+60}:m):financialChartModules;
 const financialPercent=v=>`${Number((v*100).toFixed(2))}%`;
 function financialChartConfig(module){
  const b=1e9;
@@ -24,4 +27,4 @@ function financialChartConfig(module){
  default:return null;
  }
 }
-export {financialChartModules,financialChartConfig,financialPercent};
+export {financialChartModules,financialModulesFor,financialChartConfig,financialPercent};

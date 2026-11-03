@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeColor, hsvToHex, hexToHsv } from '../dist/lib/colors.js';
-import { parseImport, validatePalette, createPalette, restorePalette, restoreSavedPalettes } from '../dist/lib/palettes.js';
+import { parseImport, validatePalette, createPalette, restorePalette, restoreSavedPalettes, moveCategoricalColor, removeCategoricalColor, addCategoricalColor, indexAfterMove } from '../dist/lib/palettes.js';
 import { presets } from '../dist/data/presets.js';
 
 test('normalize supported color formats without silently clipping invalid colors', () => {
@@ -102,4 +102,41 @@ test('saved palettes from a snapshot drop invalid or anonymous entries and toler
   const restored = restoreSavedPalettes([good, { id: 'broken' }, { ...good, id: 'imported' }]);
   assert.deepEqual(restored.map(p => p.id), ['plan-a']);
   assert.equal(restoreSavedPalettes(Array.from({ length: 40 }, (_, i) => ({ ...good, id: 'plan-' + i }))).length, 30);
+});
+
+test('moving a categorical color keeps each series aligned across themes', () => {
+  const palette = structuredClone(presets[1]), hex = theme => palette.themes[theme].categorical.map(c => c.hex);
+  moveCategoricalColor(palette, 0, 2);
+  assert.deepEqual(hex('light').slice(0, 3), ['#EB6834', '#1BAF7A', '#2A78D6']);
+  assert.deepEqual(hex('dark').slice(0, 3), ['#D95926', '#199E70', '#3987E5']);
+  assert.equal(palette.themes.light.categorical[2].name, '蓝');
+  assert.deepEqual(palette.themes.light.semantic, presets[1].themes.light.semantic);
+});
+test('the open editor follows the same color after a move', () => {
+  assert.equal(indexAfterMove(1, 1, 4), 4);
+  assert.equal(indexAfterMove(3, 1, 4), 2);
+  assert.equal(indexAfterMove(2, 4, 1), 3);
+  assert.equal(indexAfterMove(0, 1, 4), 0);
+  assert.equal(indexAfterMove(5, 1, 4), 5);
+});
+test('removing and adding colors stay valid in both themes and never empty a palette', () => {
+  const palette = structuredClone(presets[3]);
+  removeCategoricalColor(palette, 0);
+  assert.equal(palette.themes.light.categorical[0].hex, '#19B299');
+  assert.equal(palette.themes.dark.categorical[0].hex, '#73E6D5');
+  for (let i = 0; i < 10; i++) removeCategoricalColor(palette, 0);
+  assert.equal(palette.themes.light.categorical.length, 1);
+  addCategoricalColor(palette); addCategoricalColor(palette);
+  const { light, dark } = palette.themes;
+  assert.equal(light.categorical.length, 3); assert.equal(dark.categorical.length, 3);
+  assert.equal(new Set(light.categorical.map(c => c.name)).size, 3);
+  assert.equal(new Set(light.categorical.map(c => c.hex)).size, 3);
+  assert.equal(light.categorical[2].name, dark.categorical[2].name);
+  assert.equal(validatePalette(palette).themes.light.categorical.length, 3);
+});
+test('adding to a gray palette still produces a visible color', () => {
+  const palette = createPalette({ id: 'gray', name: '灰', light: ['#808080'] });
+  addCategoricalColor(palette);
+  const added = palette.themes.light.categorical[1].hex;
+  assert.notEqual(added, '#808080'); assert.match(added, /^#[0-9A-F]{6}$/);
 });

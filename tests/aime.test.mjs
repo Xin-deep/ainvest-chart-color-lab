@@ -8,7 +8,7 @@ import { aimeChartConfig } from '../dist/data/aime-reference.js';
 const context={console,URL,setTimeout,clearTimeout};
 runInNewContext(await readFile(new URL('../dist/vendor/vis-lab.bundle.js',import.meta.url),'utf8'),context);
 globalThis.PaletteVisEngine=context.PaletteVisEngine;
-const {defaultAimeBoard,validateAimeBoard,renderAimeScene}=await import('../dist/scenes/aime.js');
+const {defaultAimeBoard,validateAimeBoard,renderAimeScene,aimeBoardPanel,aimeHeaderKind}=await import('../dist/scenes/aime.js');
 const {defaultCompactBoard,newCompactModule}=await import('../dist/scenes/custom.js');
 test('Aime uses five shared chart types with independent mobile scene state',()=>{
  const board=defaultAimeBoard(),other=defaultCompactBoard();
@@ -29,4 +29,19 @@ test('new chart modules and fixtures survive full experiment import without poll
  const restored=validateAimeBoard(parsed.session.aimeBoard);assert.equal(restored.modules.length,6);assert.equal(restored.platform,'mobile');assert.equal(restored.density,'standard');assert.equal(restored.modules[0].fixture,'aime-growth');assert.equal(restored.modules[1].count,2);
  assert.equal(defaultCompactBoard().modules.length,25);
  const empty=validateAimeBoard({...aime,modules:[]});assert.equal(empty.modules.length,0);
+});
+
+test('chart headers show a pager or three actions, and the choice survives validation',()=>{
+ const board=defaultAimeBoard();
+ assert.deepEqual(board.modules.map(aimeHeaderKind),['actions','pager','pager','pager','pager']);
+ assert.equal(aimeHeaderKind(newCompactModule('radar-basic')),'actions');
+ const html=renderAimeScene(board,'light');
+ assert.equal((html.match(/aime-card-page"/g)||[]).length,4);
+ assert.equal((html.match(/aime-card-more/g)||[]).length,4);
+ board.modules[0].header='pager';board.modules[1].header='actions';
+ const restored=validateAimeBoard(JSON.parse(JSON.stringify(board)));
+ assert.deepEqual(restored.modules.slice(0,2).map(aimeHeaderKind),['pager','actions']);
+ assert.equal(validateAimeBoard({...board,modules:[{...board.modules[0],header:'bad'}]}).modules[0].header,undefined);
+ restored.selected=restored.modules[1].id;
+ assert.match(aimeBoardPanel(restored),/data-module-field="header"[\s\S]*value="actions" selected/);
 });

@@ -1,4 +1,4 @@
-import { normalizeColor } from './colors.js';
+import { normalizeColor, hexToHsv, hsvToHex } from './colors.js';
 export const clone = value => JSON.parse(JSON.stringify(value));
 export const roles = { categorical: '分类色', semantic: '涨跌色', surface: '界面色' };
 export const surfaces = {
@@ -48,6 +48,32 @@ export function restoreSavedPalettes(list) {
   return list.slice(-30).flatMap(item => {
     try { const palette = restorePalette(item); return palette.id === 'imported' ? [] : [palette]; } catch { return []; }
   });
+}
+// A position is one series in both themes, so structure edits apply to light and dark together.
+const categoricalLists = palette => ['light', 'dark'].map(theme => palette.themes[theme].categorical);
+export function moveCategoricalColor(palette, from, to) {
+  for (const list of categoricalLists(palette)) if (from < list.length && to < list.length) list.splice(to, 0, list.splice(from, 1)[0]);
+}
+export function removeCategoricalColor(palette, index) {
+  for (const list of categoricalLists(palette)) if (list.length > 1 && index < list.length) list.splice(index, 1);
+}
+export function addCategoricalColor(palette) {
+  const lists = categoricalLists(palette);
+  const taken = new Set(lists.flat().map(color => color.name));
+  let number = Math.max(...lists.map(list => list.length)) + 1;
+  while (taken.has(`系列 ${String(number).padStart(2, '0')}`)) number++;
+  for (const list of lists) {
+    // A golden-angle hue step keeps the new color distinct from the one before it.
+    const [h, s, v] = hexToHsv(list.at(-1).hex);
+    list.push({ id: `category-new-${number}`, name: `系列 ${String(number).padStart(2, '0')}`, hex: hsvToHex((h + 137.5) % 360, Math.max(s, 35), Math.min(95, Math.max(v, 45))) });
+  }
+}
+// Where an index ends up after moving one item, so the open editor stays on the same color.
+export function indexAfterMove(index, from, to) {
+  if (index === from) return to;
+  if (from < index && index <= to) return index - 1;
+  if (to <= index && index < from) return index + 1;
+  return index;
 }
 export function parseImport(text) {
   if (!text.trim()) throw new Error('请先输入色值或配置代码');

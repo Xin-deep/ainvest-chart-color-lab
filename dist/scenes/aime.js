@@ -2,7 +2,7 @@ import { compactTypes, newCompactModule, validateCompactBoard, compactBoardPanel
 import { aimeFixtureTypes, aimeCardTitle } from '../data/aime-reference.js';
 import { surfaces } from '../lib/palettes.js';
 const aimeEsc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const aimeGlyph=(name)=>{const shapes={menu:'M5 6h14M5 12h10M5 18h6',edit:'m14 4 6 6-9 9H5v-6zM12 6l6 6',sound:'m4 9 4 0 5-4v14l-5-4H4zM17 8l4 8M21 8l-4 8',plus:'M12 4v16M4 12h16',arrow:'M12 20V4m-6 6 6-6 6 6',robot:'M5 7h14v12H5zM9 7V4h6M8 12h.1M16 12h.1M9 16h6',down:'M12 4v16m-6-6 6 6 6-6'};return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${shapes[name]||shapes.edit}"/></svg>`;};
+const aimeGlyph=(name)=>{const shapes={menu:'M5 6h14M5 12h10M5 18h6',edit:'m14 4 6 6-9 9H5v-6zM12 6l6 6',sound:'m4 9 4 0 5-4v14l-5-4H4zM17 8l4 8M21 8l-4 8',plus:'M12 4v16M4 12h16',arrow:'M12 20V4m-6 6 6-6 6 6',robot:'M5 7h14v12H5zM9 7V4h6M8 12h.1M16 12h.1M9 16h6',down:'M12 4v16m-6-6 6 6 6-6',copy:'M11 9h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2zM5.5 15A1.5 1.5 0 0 1 4 13.5v-8A1.5 1.5 0 0 1 5.5 4h8A1.5 1.5 0 0 1 15 5.5',download:'M12 4v11m-5-5 5 5 5-5M4 16v4h16v-4',expand:'M14 4h6v6M10 20H4v-6',prev:'M15 5l-7 7 7 7',next:'M9 5l7 7-7 7',more:'M5 12h.01M12 12h.01M19 12h.01'};return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${shapes[name]||shapes.edit}"/></svg>`;};
 function defaultAimeBoard(){
   const defaults=[['aime-growth',12,3],['aime-duration',2,1],['aime-factors',7,1],['aime-stack',5,5],['aime-grouped',5,4]];
   const modules=defaults.map(([fixture,count,series])=>({...newCompactModule(aimeFixtureTypes[fixture]),fixture,count,series,fixtureCustomized:true}));
@@ -11,12 +11,15 @@ function defaultAimeBoard(){
 function validateAimeBoard(input){
   if(!input||!Array.isArray(input.modules))return defaultAimeBoard();
   const board=validateCompactBoard({...input,catalogVersion:3,columns:1});board.platform='mobile';
-  for(const m of board.modules){const original=input.modules.find(v=>v.id===m.id);if(original&&aimeFixtureTypes[original.fixture]===m.type){m.fixture=original.fixture;if(m.fixture==='aime-duration')m.count=2;}}
+  for(const m of board.modules){const original=input.modules.find(v=>v.id===m.id);if(['pager','actions'].includes(original?.header))m.header=original.header;if(original&&aimeFixtureTypes[original.fixture]===m.type){m.fixture=original.fixture;if(m.fixture==='aime-duration')m.count=2;}}
   return board;
 }
+// A chart with several pages shows a pager and overflow menu; a single chart shows its three actions.
+const aimeHeaderKind=module=>module.header||(module.fixture&&module.fixture!=='aime-growth'?'pager':'actions');
+const aimeCardTools=module=>`<span class="aime-card-tools" aria-hidden="true">${aimeHeaderKind(module)==='pager'?`<span class="aime-card-prev">${aimeGlyph('prev')}</span><span class="aime-card-page">1/2</span>${aimeGlyph('next')}<span class="aime-card-more">${aimeGlyph('more')}</span>`:`${aimeGlyph('copy')}${aimeGlyph('download')}${aimeGlyph('expand')}`}</span>`;
 function aimeCard(module,board){
   const def=compactTypes.find(t=>t.id===module.type),title=module.fixture==='aime-growth'?'AAPL Net Income YoY, Total Revenue YoY, Diluted EPS YoY':module.fixture?aimeCardTitle:def.name;
-  return `<section class="aime-chart-card ${board.selected===module.id?'is-selected':''}" data-module-id="${module.id}"><header><button data-action="module-select" data-value="${module.id}" aria-pressed="${board.selected===module.id}">${aimeEsc(title)}</button><span class="aime-card-pages" aria-hidden="true">‹ <span>1/2</span> ›</span><button class="aime-insert" data-action="module-picker" data-value="${module.id}" aria-label="在此图表后添加组件">＋</button></header>${compactModuleTools(module,board)}<div class="aime-chart-body"><div class="compact-chart-target" data-chart-id="${module.id}" data-chart-type="${module.type}"></div></div></section>`;
+  return `<section class="aime-chart-card ${board.selected===module.id?'is-selected':''}" data-module-id="${module.id}"><header><button data-action="module-select" data-value="${module.id}" aria-pressed="${board.selected===module.id}">${aimeEsc(title)}</button>${aimeCardTools(module)}<button class="aime-insert" data-action="module-picker" data-value="${module.id}" aria-label="在此图表后添加组件">＋</button></header>${compactModuleTools(module,board)}<div class="aime-chart-body"><div class="compact-chart-target" data-chart-id="${module.id}" data-chart-type="${module.type}"></div></div></section>`;
 }
 const aimeCashCopy=()=>`<section class="aime-copy"><h2>Cash-return policy is intact, though not a yield play</h2><p>Current dividend yield is a modest 0.36 %4, but Apple has paid a dividend for 23 consecutive years and has grown it for 14 straight years</p></section>`;
 function renderAimeScene(board,theme){
@@ -28,6 +31,8 @@ function aimeBoardPanel(board){
   if(start>=0&&end>start)html=html.slice(0,start)+html.slice(end);
   html=html.replace('看板布局','对话组件');
   html=html.replace(/<label>模块占位<select[\s\S]*?<\/select><\/label>/,'');
+  const selected=board.modules.find(m=>m.id===board.selected);
+  if(selected)html=html.replace('<label>移动到',`<label>表头右侧<select data-module-field="header" aria-label="表头右侧样式">${[['actions','三个按钮'],['pager','切换和更多']].map(([value,label])=>`<option value="${value}" ${aimeHeaderKind(selected)===value?'selected':''}>${label}</option>`).join('')}</select></label><label>移动到`);
   if(board.modules.find(m=>m.id===board.selected)?.fixture==='aime-duration')html=html.replace(/<label>数据项数<input[^>]*><\/label>/,'<p class="editor-footnote">连续分红 23 年 · 分红增长 14 年</p>');
   return html;
 }
@@ -39,4 +44,4 @@ function applyAimePalette(root,palette,theme){
     else page?.style.removeProperty(`--aime-${name}`);
   }
 }
-export {defaultAimeBoard,validateAimeBoard,renderAimeScene,aimeBoardPanel,applyAimePalette};
+export {aimeHeaderKind,defaultAimeBoard,validateAimeBoard,renderAimeScene,aimeBoardPanel,applyAimePalette};

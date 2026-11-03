@@ -3,21 +3,23 @@
 - **线上地址：** https://xin-deep.github.io/ainvest-chart-color-lab/
 - **手机预览：** https://xin-deep.github.io/ainvest-chart-color-lab/aime.html
 
-把候选色板放进接近真实产品的页面里，对比基线和修改结果，并检查色差、色觉缺陷和对比度。当前版本 0.16.1，变更记录见 [CHANGELOG](CHANGELOG.md)。
+把候选色板放进接近真实产品的页面里，对比基线和修改结果，并检查色差、色觉缺陷和对比度。当前版本 0.17.0，变更记录见 [CHANGELOG](CHANGELOG.md)。
 
 ## 功能
 
 - **五个场景：** 财报分析、Aime 对话、自由看板、web 市场、Terminal 工作区，均支持浅色和深色。
-- **调色：** 分类色、涨跌色、界面色独立编辑，支持 OKLCH、HEX、RGB、HSL，以及 A/B 对比、撤销和 JSON 导入导出。
+- **调色：** 分类色、涨跌色、界面色独立编辑，支持 OKLCH、HSB、HEX、RGB、HSL，以及 A/B 对比、撤销和 JSON 导入导出。
+- **分类色顺序：** 可拖动排序、添加和删除，同时作用于浅色和深色；涨跌色和界面色位置固定。
 - **预置色板：** Ainvest 原始、Claude、TradingView、Simply Wall St、Robinhood，在 [presets.js](dist/data/presets.js) 维护。
 - **色值检验：** OKLCH 分布、ΔE、色觉缺陷模拟和 WCAG 对比度。
+- **Aime 图表表头：** 单张图表显示复制、下载、全屏；可切换的图表显示页码和更多，可在模块设置里调整。这些控件目前只是模板展示，点击没有效果。
 - **手机分享：** 固定只读链接实时同步，也可以生成不再更新的静态快照。
 
 图表使用固定演示数据，不是实时行情。方案默认保存在各自的浏览器中。
 
 ## 手机分享
 
-在 Aime 场景点「分享手机预览」→「获取固定链接」，把 `aime.html?live=…` 发给查看者。
+在 Aime 场景点「分享手机预览」→「获取固定链接」，把 `aime.html?live=…` 发给查看者。手机预览页（`aime.html`）只显示 Aime 对话，其他场景只在网站上提供。
 
 - **同步内容：** 配色、模块和色板列表（预置色板和已保存方案）会自动同步。**拿到链接的人都能看到已保存方案及其名称。**
 - **再次分享：** 同一浏览器复用原链接，并把内容更新为当前配色。
@@ -49,6 +51,9 @@ npm test
 | `dist/data/` | 预置色板与场景参考数据 |
 | `scripts/` | 本地服务与构建脚本 |
 | `supabase/` | 数据库迁移和[接入步骤](supabase/SETUP.md) |
+| `tests/` | 单元测试，用 `npm test` 运行 |
+
+web 和 Terminal 场景带大量参考数据，在 `app.js` 里按需加载，不要改回静态导入。`aime.html` 列出了首屏模块用于预加载，新增或删除首屏模块时要同步更新，测试会检查。
 
 **改完 `dist/` 要重建离线版并一起提交：** 执行 `npm run build:preview` 更新 `preview.html`。它不随 Pages 发布，CI 也不检查它是否最新。
 
