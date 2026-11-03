@@ -154,10 +154,12 @@ test('the sync service keeps palette identity and saved palettes for viewers', a
   const source = snapshot();
   source.draft = { ...source.draft, id: 'claude' };
   source.saved = [{ ...structuredClone(presets[0]), id: 'plan-a', name: '方案 A' }];
+  source.presetEdits = { ainvest: structuredClone(presets[0]) };
   const created = await api(base, '', 'POST', { snapshot: source, editToken: token });
   const { data } = await api(base, '/' + created.data.id);
   assert.equal(data.snapshot.draft.id, 'claude');
   assert.deepEqual(data.snapshot.saved.map(p => [p.id, p.name]), [['plan-a', '方案 A']]);
+  assert.deepEqual(Object.keys(data.snapshot.presetEdits), ['ainvest']);
 });
 
 test('only routine sync states stay silent; connection and write problems stay visible', () => {

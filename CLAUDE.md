@@ -30,6 +30,7 @@ npm run build:preview  # 改完 dist/ 必须执行，并提交 preview.html
 - **按需加载：** web 和 Terminal 场景在 `app.js` 里动态导入，不要改回静态导入。新增动态导入时要同步改 `scripts/build-preview.mjs`。
 - **预加载列表：** `aime.html` 列出了首屏模块，增删首屏模块要同步更新，`tests/aime-entry.test.mjs` 会检查。
 - **色板 id：** `robinhood`、`finary`、`wealthsimple` 是旧 id，载入时会被重置，新色板不能使用。
+- **改色写回：** `persist()` 通过 `writeBackDraft` 把草稿写回原色板：我的方案写回 `state.saved`，预置色板写入 `state.presetEdits`，`presets` 本身不变。`state.baseline` 只是 A/B 对照，历史记录里的 id 和名称不要带回当前色板（见 `onOpenPalette`）。
 - **色板结构：** 只有分类色能排序和增删，且同时作用于浅色和深色。涨跌色固定 2 个，界面色固定 6 个，位置都有固定含义。
 - **Aime 界面色单独一套：** Aime 的默认界面色写在 `styles.css` 的 `.aime-stage`，`scenes/aime.js` 的 `aimeDefaults` 要保持一致（有测试检查），预置色板的专属背景在 `presets.js` 的 `aimeBackgrounds`，按色板 id 查找。控制台在 Aime 场景通过 `shownPalette()` 显示实际值，不要把它写回色板。
 - **改完要看实际效果：** 单元测试只覆盖逻辑，布局和拖动要在浏览器里验证。
