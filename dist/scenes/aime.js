@@ -1,6 +1,7 @@
 import { compactTypes, newCompactModule, validateCompactBoard, compactBoardPanel, compactModuleTools } from './custom.js';
 import { aimeFixtureTypes, aimeCardTitle } from '../data/aime-reference.js';
 import { surfaces } from '../lib/palettes.js';
+import { presets, aimeBackgrounds } from '../data/presets.js';
 const aimeEsc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const aimeGlyph=(name)=>{const shapes={menu:'M5 6h14M5 12h10M5 18h6',edit:'m14 4 6 6-9 9H5v-6zM12 6l6 6',sound:'m4 9 4 0 5-4v14l-5-4H4zM17 8l4 8M21 8l-4 8',plus:'M12 4v16M4 12h16',arrow:'M12 20V4m-6 6 6-6 6 6',robot:'M5 7h14v12H5zM9 7V4h6M8 12h.1M16 12h.1M9 16h6',down:'M12 4v16m-6-6 6 6 6-6',copy:'M11 9h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2zM5.5 15A1.5 1.5 0 0 1 4 13.5v-8A1.5 1.5 0 0 1 5.5 4h8A1.5 1.5 0 0 1 15 5.5',download:'M12 4v11m-5-5 5 5 5-5M4 16v4h16v-4',expand:'M14 4h6v6M10 20H4v-6',prev:'M15 5l-7 7 7 7',next:'M9 5l7 7-7 7',more:'M5 12h.01M12 12h.01M19 12h.01'};return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${shapes[name]||shapes.edit}"/></svg>`;};
 function defaultAimeBoard(){
@@ -36,12 +37,21 @@ function aimeBoardPanel(board){
   if(board.modules.find(m=>m.id===board.selected)?.fixture==='aime-duration')html=html.replace(/<label>数据项数<input[^>]*><\/label>/,'<p class="editor-footnote">连续分红 23 年 · 分红增长 14 年</p>');
   return html;
 }
-function applyAimePalette(root,palette,theme){
-  const colors=palette.themes[theme].surface;
-  for(const [i,name] of [[0,'bg'],[1,'card'],[2,'text'],[3,'muted'],[4,'line']]){
-    const page=root.querySelector('.aime-stage');
-    if(colors[i].hex!==surfaces[theme][i])page?.style.setProperty(`--aime-${name}`,colors[i].hex);
-    else page?.style.removeProperty(`--aime-${name}`);
-  }
+// Same values as .aime-stage in styles.css; the conversation keeps them until a surface color is edited.
+const aimeDefaults={light:['#FFFFFF','#FFFFFF','#202020','#929292','#E5E5E5'],dark:['#141414','#141414','#CCCCCC','#737373','#2E2E2E']};
+// An edited page background wins over the preset's Aime background.
+function aimeSurfaceHex(palette,theme,i){
+  const hex=palette.themes[theme].surface[i].hex,preset=presets.find(p=>p.id===palette.id);
+  if(i===0&&hex===preset?.themes[theme].surface[0].hex&&aimeBackgrounds[palette.id]?.[theme])return aimeBackgrounds[palette.id][theme];
+  return hex===surfaces[theme][i]?aimeDefaults[theme][i]??hex:hex;
 }
-export {aimeHeaderKind,defaultAimeBoard,validateAimeBoard,renderAimeScene,aimeBoardPanel,applyAimePalette};
+// What the conversation really shows, for the color console. Never write this back to the palette.
+function aimeShownPalette(palette,theme){
+  const colors=palette.themes[theme];
+  return {...palette,themes:{...palette.themes,[theme]:{...colors,surface:colors.surface.map((c,i)=>({...c,hex:aimeSurfaceHex(palette,theme,i)}))}}};
+}
+function applyAimePalette(root,palette,theme){
+  const page=root.querySelector('.aime-stage');
+  for(const [i,name] of [[0,'bg'],[1,'card'],[2,'text'],[3,'muted'],[4,'line']])page?.style.setProperty(`--aime-${name}`,aimeSurfaceHex(palette,theme,i));
+}
+export {aimeHeaderKind,defaultAimeBoard,validateAimeBoard,renderAimeScene,aimeBoardPanel,applyAimePalette,aimeShownPalette};

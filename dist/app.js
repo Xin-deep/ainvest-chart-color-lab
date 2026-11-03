@@ -13,17 +13,17 @@ import { renderFinancialScene, applyFinancialPalette } from './scenes/financial.
 
 import { compactTypes, newCompactModule, defaultCompactBoard, validateCompactBoard, renderCompactBoard, compactBoardPanel, mountCompactBoard, destroyCompactCharts, moveCompactModule, setCompactModuleHidden } from './scenes/custom.js';
 
-import { defaultAimeBoard, validateAimeBoard, renderAimeScene, aimeBoardPanel, applyAimePalette } from './scenes/aime.js';
+import { defaultAimeBoard, validateAimeBoard, renderAimeScene, aimeBoardPanel, applyAimePalette, aimeShownPalette } from './scenes/aime.js';
 
 import { financialChartModules, financialModulesFor } from './data/financial-shared.js';
 
 import { defaultFinancialBoard, validateFinancialBoard, renderFinancialExtras } from './scenes/financial-extras.js';
 
-const VERSION = '0.17.1';
+const VERSION = '0.17.2';
 const STORAGE_KEY = 'ainvest-palette-lab:v1';
 const scenes = [
-  { id: 'financial', name: '财报分析', en: 'Financial analysis', icon: 'file' },
   { id: 'aime', name: 'Aime 对话', en: 'Aime conversation', icon: 'chat' },
+  { id: 'financial', name: '财报分析', en: 'Financial analysis', icon: 'file' },
   { id: 'custom', name: '自由看板', en: 'Custom dashboard', icon: 'grid' },
   { id: 'terminal', name: 'web', en: 'web', icon: 'chart' },
   { id: 'workspace', name: 'Terminal', en: 'Terminal workspace', icon: 'grid' }
@@ -251,6 +251,8 @@ function viewerPick() {
   return viewerOptions().find(p => p.id === live.viewerPalette) || null;
 }
 const current = () => viewerPick() || sharedPalette();
+// The console lists the colors the open scene really shows; edits still go to the palette itself.
+const shownPalette = (palette = current()) => state.scene === 'aime' ? aimeShownPalette(palette, state.theme) : palette;
 const selectedColor = () => state.draft.themes[state.theme][state.role][state.selected];
 function persist() {
   if (isLiveReadOnly()) return;
@@ -345,7 +347,7 @@ function render() {
           <div class="sidebar-tabs" role="tablist" aria-label="颜色操作"><button role="tab" aria-selected="${state.panel === 'palette'}" class="${state.panel === 'palette' ? 'active' : ''}" data-action="panel" data-value="palette">${icon('sliders')}编辑色板</button><button role="tab" aria-selected="${state.panel === 'import'}" class="${state.panel === 'import' ? 'active' : ''}" data-action="panel" data-value="import">${icon('upload')}导入颜色</button><button role="tab" aria-selected="${state.panel === 'check'}" class="${state.panel === 'check' ? 'active' : ''}" data-action="panel" data-value="check">色值检验</button></div>
         </div>
         ${state.mode === 'baseline' && state.panel === 'palette' ? `<div class="baseline-notice">${icon('lock')}正在查看原始基线 · 切换 B 后可调色</div>` : ''}
-        <div class="side-scroll">${state.panel === 'palette' ? moduleSettingsPanel() + palettePanel() : state.panel === 'check' ? renderColorChecks(current(),state.theme,state.role,state.checkSettings) : importPanel()}</div>
+        <div class="side-scroll">${state.panel === 'palette' ? moduleSettingsPanel() + palettePanel() : state.panel === 'check' ? renderColorChecks(shownPalette(),state.theme,state.role,state.checkSettings) : importPanel()}</div>
         <div class="sidebar-footer"><span id="save-status">${state.panel === 'import' ? (live.role==='owner'?'应用导入后将同步至共享方案':'本地解析 · 文件内容不会上传') : storageAvailable ? `已自动保存 · ${changedCount()} 处颜色修改` : '浏览器存储不可用，请导出保存'}</span></div>
       </aside>
     </div>
@@ -404,9 +406,9 @@ function oklchDetails(hex){
   return `<div class="oklch-heading"><span>OKLCH 换算</span><span class="oklch-pass">${check.valid?'数值有效':'数值无效'}</span></div><div class="oklch-components"><span>L 明度<strong>${(value.l*100).toFixed(2)}%</strong></span><span>C 彩度<strong>${value.c.toFixed(5)}</strong></span><span>h 色相<strong>${value.h===null?'无彩色':value.h.toFixed(2)+'°'}</strong></span></div><div class="oklch-css"><code>${oklchCss(value)}</code><button class="icon-button" data-action="copy-oklch" aria-label="复制 OKLCH 色值">${icon('copy')}</button></div><p class="oklch-note">OKLCH 判断数值有效性；ΔE 和对比度按「色值检验」设置判断。<a href="https://www.w3.org/TR/css-color-4/#ok-lab" target="_blank" rel="noopener noreferrer">计算依据</a></p>`;
 }
 function palettePanel() {
-  const p = current(), colors = p.themes[state.theme][state.role], report=buildPaletteCheckReport(p,state.theme,state.role,state.checkSettings);
+  const p = shownPalette(), colors = p.themes[state.theme][state.role], report=buildPaletteCheckReport(p,state.theme,state.role,state.checkSettings);
   state.selected = Math.min(state.selected, colors.length - 1);
-  const color = colors[state.selected], base = state.baseline.themes[state.theme][state.role][state.selected], hsv = hexToHsv(color.hex), readonly = state.mode === 'baseline', editable = state.role === 'categorical' && !readonly, hsb = state.editorModel === 'hsb';
+  const color = colors[state.selected], base = shownPalette(state.baseline).themes[state.theme][state.role][state.selected], hsv = hexToHsv(color.hex), readonly = state.mode === 'baseline', editable = state.role === 'categorical' && !readonly, hsb = state.editorModel === 'hsb';
   return `<section class="panel-section"><div class="section-heading"><span class="section-label">Palette / 当前色板</span><button class="text-button" data-action="reset" ${!changedCount() ? 'disabled' : ''}>恢复原始</button></div><div class="active-palette-name">${esc(p.name)}</div><div class="preset-source">${esc(p.source)}</div>${!p.availableThemes.includes(state.theme) ? '<div class="theme-warning">当前主题为实验复用色值，未经竞品来源确认。</div>' : ''}<div class="reference-caption">${icon('lock')}A 为冻结基线，B 为当前调整</div></section>
     <section class="panel-section"><div class="section-heading"><span class="section-label">Colors / 颜色角色</span><span class="mono muted" style="font-size:9px">${state.theme === 'light' ? 'LIGHT' : 'DARK'}</span></div><div class="role-tabs" aria-label="颜色角色">${Object.entries(roles).map(([id, name]) => `<button class="${state.role === id ? 'active' : ''}" data-action="role" data-value="${id}" aria-pressed="${state.role === id}">${name}<small>${p.themes[state.theme][id].length}</small></button>`).join('')}</div><div class="color-list">${colors.map((c, i) => `<div class="color-item">${editable && colors.length > 1 ? `<button class="color-drag" data-color-drag="${i}" aria-label="调整「${esc(c.name)}」的顺序，可拖动或按上下方向键" title="拖动调整顺序">${icon('grip')}</button>` : ''}<button class="color-row ${state.editorOpen && state.selected === i ? 'selected' : ''}" data-action="color" data-value="${i}" aria-label="${esc(c.name)} ${c.hex}" aria-pressed="${state.editorOpen && state.selected === i}" aria-expanded="${state.editorOpen && state.selected === i}"><span class="color-index mono">${String(i + 1).padStart(2, '0')}</span><i class="swatch" style="background:${c.hex}" data-swatch="${i}"></i><span class="color-description"><span class="color-main"><span class="color-name">${esc(c.name)}</span><span class="color-value mono" data-color-value="${i}">${c.hex}</span></span><span class="color-oklch mono" data-oklch="${i}">${compactOklch(c.hex)}</span><span class="color-check-badges" data-color-checks="${i}">${renderColorCheckBadges(report.entries[i],report)}</span></span>${state.mode === 'draft' && c.hex !== state.baseline.themes[state.theme][state.role][i]?.hex ? '<i class="changed-dot"></i>' : ''}${state.editorOpen && state.selected === i ? icon('sliders') : ''}</button>${editable && colors.length > 1 ? `<button class="color-remove" data-action="color-remove" data-value="${i}" aria-label="删除「${esc(c.name)}」" title="删除颜色">${icon('close')}</button>` : ''}</div>`).join('')}</div>${editable && colors.length < 64 ? '<button class="text-button color-add" data-action="color-add">＋ 添加颜色</button>' : ''}<div class="colors-note">${icon('info')}${state.role === 'categorical' ? '顺序和增删同时作用于浅色、深色；色值分主题修改' : '仅修改当前角色，其他用途保持独立'}</div></section>
     ${state.editorOpen ? `<section class="panel-section color-editor"><div class="editor-heading"><span class="editor-name"><span>编辑</span>${esc(color.name)}</span><div class="editor-tools"><div class="segment editor-model" aria-label="调色模式">${[['oklch', 'OKLCH'], ['hsb', 'HSB']].map(([id, name]) => `<button data-action="editor-model" data-value="${id}" class="${state.editorModel === id ? 'active' : ''}" aria-pressed="${state.editorModel === id}">${name}</button>`).join('')}</div>${editable && colors.length > 1 ? `<button class="icon-button" data-action="color-remove" data-value="${state.selected}" aria-label="删除此颜色" title="删除此颜色">${icon('trash')}</button>` : ''}<button class="icon-button" data-action="editor-close" aria-label="收起颜色编辑器">${icon('close')}</button></div></div><div class="color-inputs"><label class="picker-wrap" style="background:${color.hex}" title="打开颜色选择器"><input type="color" id="native-color" value="${color.hex}" aria-label="${esc(color.name)}颜色选择器" ${readonly ? 'disabled' : ''}></label><label class="hex-field"><span>HEX</span><input class="mono" id="hex-input" value="${color.hex}" maxlength="64" aria-label="色值，支持 HEX、RGB、HSL" spellcheck="false" ${readonly ? 'disabled' : ''}></label><button class="icon-button" data-action="copy-color" title="复制色值" aria-label="复制色值">${icon('copy')}</button></div><div class="colorjs-picker-shell" ${hsb ? '' : 'data-colorjs-picker'}>${hsb ? '' : `<color-picker space="oklch" color="${color.hex}" gamut="none" aria-label="OKLCH 颜色选择器"><span slot="color-space" class="picker-space-name">OKLCH</span></color-picker>`}<div class="hsb-fallback">${['H 色相', 'S 饱和', 'B 亮度'].map((label, i) => `<div class="slider-row"><label for="slider-${i}" title="${label}">${label[0]}</label><input id="slider-${i}" data-hsv="${i}" type="range" min="0" max="${i === 0 ? 359 : 100}" step="1" value="${Math.round(hsv[i])}" aria-label="${label}" ${readonly ? 'disabled' : ''} style="background:${i === 0 ? 'linear-gradient(to right,#ff7777,#dddd55,#55cc88,#55cddd,#7777ee,#dd77dd,#ff7777)' : i === 1 ? `linear-gradient(to right,#ddd,${hsvToHex(hsv[0], 100, 100)})` : `linear-gradient(to right,#222,${hsvToHex(hsv[0], hsv[1], 100)})`}"><span class="hsv-number mono"><input id="output-${i}" data-hsv-number="${i}" type="number" min="0" max="${i === 0 ? 359 : 100}" step="1" value="${Math.round(hsv[i])}" aria-label="${label}数值" ${readonly ? 'disabled' : ''}><span aria-hidden="true">${i === 0 ? '°' : '%'}</span></span></div>`).join('')}</div>${hsb ? '' : '<p class="picker-status" data-picker-status role="status">正在加载 Color.js 选色器…</p>'}</div><div class="oklch-readout" id="oklch-readout">${oklchDetails(color.hex)}<div class="color-check-badges" data-color-checks="${state.selected}">${renderColorCheckBadges(report.entries[state.selected],report)}</div></div><div class="mini-diff"><i style="background:${base?.hex || '#FFFFFF'}"></i><span class="mono">${base?.hex || '新增'}</span>${icon('arrow')}<i id="after-swatch" style="background:${color.hex}"></i><span id="after-hex" class="mono">${color.hex}</span></div><div class="editor-footnote">修改应用于${state.theme === 'light' ? '浅色' : '深色'}主题的「${roles[state.role]}」。<br>RGB <span class="mono" id="rgb-value">${rgbText(color.hex)}</span></div></section>` : ''}`;
@@ -453,7 +455,7 @@ function setColor(value, record = true, repaint = true) {
   if (isLiveReadOnly()) return;
   if (state.mode === 'baseline') return;
   const hex = normalizeColor(value);
-  if (hex === selectedColor().hex) return;
+  if (hex === selectedColor().hex || hex === shownPalette().themes[state.theme][state.role][state.selected].hex) return;
   if (record) remember(); selectedColor().hex = hex; persist(); if (repaint) render(); else liveColor(hex);
 }
 function liveColor(hex) {
@@ -466,7 +468,7 @@ function liveColor(hex) {
   document.querySelector('#after-hex').textContent = hex;
   document.querySelector('#rgb-value').textContent = rgbText(hex);
   document.querySelector(`[data-oklch="${i}"]`).innerHTML = compactOklch(hex);
-  const report=buildPaletteCheckReport(current(),state.theme,state.role,state.checkSettings);
+  const report=buildPaletteCheckReport(shownPalette(),state.theme,state.role,state.checkSettings);
   document.querySelector('#oklch-readout').innerHTML = oklchDetails(hex)+`<div class="color-check-badges" data-color-checks="${i}">${renderColorCheckBadges(report.entries[i],report)}</div>`;
   // A changed color can become another color's closest neighbor; recalculate every badge.
   for(const badges of document.querySelectorAll('[data-color-checks]'))badges.innerHTML=renderColorCheckBadges(report.entries[Number(badges.dataset.colorChecks)],report);
@@ -481,7 +483,7 @@ function bindInputs() {
   const pickerShell=document.querySelector('[data-colorjs-picker]');
   let pickerRecorded=false;
   if(pickerShell)bindColorJsPicker(pickerShell,{
-    hex:current().themes[state.theme][state.role][state.selected].hex,readonly:state.mode==='baseline',
+    hex:shownPalette().themes[state.theme][state.role][state.selected].hex,readonly:state.mode==='baseline',
     onBegin:()=>{editorTransaction=clone(state.draft);pickerRecorded=false;},
     onInput:hex=>{
       if(hex!==selectedColor().hex&&!pickerRecorded){remember(editorTransaction);pickerRecorded=true;}
@@ -515,7 +517,7 @@ function bindInputs() {
     const field=input.dataset.checkField;
     if(field==='role')state.role=Object.hasOwn(roles,input.value)?input.value:'categorical';
     else state.checkSettings=normalizeCheckSettings({...state.checkSettings,[field]:field==='opacity'?Number(input.value)/100:input.value});
-    persist();const side=document.querySelector('.side-scroll'),scroll=side.scrollTop;side.innerHTML=renderColorChecks(current(),state.theme,state.role,state.checkSettings);side.scrollTop=scroll;bindInputs();
+    persist();const side=document.querySelector('.side-scroll'),scroll=side.scrollTop;side.innerHTML=renderColorChecks(shownPalette(),state.theme,state.role,state.checkSettings);side.scrollTop=scroll;bindInputs();
   });
   document.querySelector('#import-name')?.addEventListener('input',e=>{importName=e.target.value;const preview=document.querySelector('.import-preview-name');if(preview&&pendingImport?.candidates?.[importedIndex])preview.textContent=importName.trim()||pendingImport.candidates[importedIndex].name;});
   for (const input of document.querySelectorAll('[data-module-field]')) input.addEventListener('change', () => {
@@ -730,11 +732,11 @@ app.addEventListener('click', async e => {
   if (action === 'redo' && future.length) { history.push(clone(state.draft)); state.draft = future.pop(); state.mode = 'draft'; }
   if (action === 'reset' && changedCount()) { remember(); state.draft = clone(state.baseline); state.mode = 'draft'; toast('已恢复原始色板，可撤销此操作'); }
   if (action === 'copy-oklch') {
-    try { await navigator.clipboard.writeText(oklchCss(hexToOklch(current().themes[state.theme][state.role][state.selected].hex)));toast('已复制 OKLCH 色值'); } catch {toast('无法访问剪贴板，请从 OKLCH 文本手动复制');}
+    try { await navigator.clipboard.writeText(oklchCss(hexToOklch(shownPalette().themes[state.theme][state.role][state.selected].hex)));toast('已复制 OKLCH 色值'); } catch {toast('无法访问剪贴板，请从 OKLCH 文本手动复制');}
     return;
   }
   if (action === 'copy-color') {
-    const hex = current().themes[state.theme][state.role][state.selected].hex;
+    const hex = shownPalette().themes[state.theme][state.role][state.selected].hex;
     try { await navigator.clipboard.writeText(hex); toast(`已复制 ${hex}`); } catch { toast('无法访问剪贴板，请从色值输入框手动复制'); }
     return;
   }

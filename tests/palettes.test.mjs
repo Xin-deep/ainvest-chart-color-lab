@@ -82,10 +82,10 @@ test('brand palettes use the supplied values and backgrounds', () => {
   assert.deepEqual(hex(byId['simply-wall-st'].themes.dark.categorical), ['#1D96DC', '#73E6D5', '#BA4986', '#E6B068', '#9F50E7']);
   assert.deepEqual(hex(byId['simply-wall-st'].themes.light.semantic), ['#12A15B', '#E74142']);
   assert.deepEqual(hex(byId['simply-wall-st'].themes.dark.semantic), ['#2EC87C', '#E74142']);
-  for (const [id, light, dark] of [['claude', '#FFFFFF', '#191919'], ['tradingview', '#FFFFFF', '#000000'], ['simply-wall-st', '#EFECE6', '#212121'], ['robinhood-brand', '#FFFFFF', '#000000']]) {
-    assert.deepEqual(hex(byId[id].themes.light.surface).slice(0, 2), [light, light]);
-    assert.deepEqual(hex(byId[id].themes.dark.surface).slice(0, 2), [dark, dark]);
-    assert.equal(validatePalette(byId[id]).themes.dark.surface[0].hex, dark);
+  for (const [id, light, dark] of [['claude', ['#F5F5F5', '#FFFFFF'], ['#000000', '#191919']], ['tradingview', ['#F5F5F5', '#FFFFFF'], ['#000000', '#1A1A1A']], ['simply-wall-st', ['#F6F4EF', '#EFECE6'], ['#1A1A1A', '#212121']], ['robinhood-brand', ['#F5F5F5', '#FFFFFF'], ['#000000', '#1A1A1A']]]) {
+    assert.deepEqual(hex(byId[id].themes.light.surface).slice(0, 2), light);
+    assert.deepEqual(hex(byId[id].themes.dark.surface).slice(0, 2), dark);
+    assert.equal(validatePalette(byId[id]).themes.dark.surface[0].hex, dark[0]);
   }
   assert.equal(presets[0].themes.light.surface[0].hex, '#F5F5F6');
 });
