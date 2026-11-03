@@ -78,10 +78,10 @@ function reportBalance(part) {
     out+=reportMark('categorical',0,`Assets ${assets[i]}B`,reportRect(x,bottom-assets[i]/480*(bottom-top),12.3,assets[i]/480*(bottom-top),'currentColor'));
     out+=reportMark('categorical',1,`Liabilities ${liabilities[i]}B`,reportRect(x+12.3,bottom-liabilities[i]/480*(bottom-top),11.5,liabilities[i]/480*(bottom-top),'currentColor'));
     const px=x+12,py=bottom-ratio[i]/100*(bottom-top);ratios.push([px,py]);
-    out+=reportText(px,py-5,ratio[i].toFixed(2)+'%',4.7,{fill:reportColor('categorical',6),anchor:'middle'}).replace('<text ',`<text data-percent-index="${i}" data-percent-y="${py-5}" `);
+    out+=reportText(px,py-5,ratio[i].toFixed(2)+'%',4.7,{fill:reportColor('line',0),anchor:'middle'}).replace('<text ',`<text data-percent-index="${i}" data-percent-y="${py-5}" `);
     out+=`<text x="${x+12}" y="726" font-size="4.5" fill="var(--report-muted)" text-anchor="middle"><tspan x="${x+12}">${['Q4','Q1','Q2','Q3','Q4','Q1','Q2','Q3'][i]}</tspan><tspan x="${x+12}" dy="8">${i===0?'2024':i<5?'2025':'2026'}</tspan></text>`;
   }
-  out+=reportMark('categorical',6,'Debt Ratio',reportPath('M'+ratios.map(p=>p.join(' ')).join('L'),'currentColor',.9)+ratios.map(([x,y])=>`<circle cx="${x}" cy="${y}" r="1.6" fill="currentColor"/>`).join(''));
+  out+=reportMark('line',0,'Debt Ratio',reportPath('M'+ratios.map(p=>p.join(' ')).join('L'),'currentColor',.9)+ratios.map(([x,y])=>`<circle cx="${x}" cy="${y}" r="1.6" fill="currentColor"/>`).join(''));
   out+=reportWatermark(38,714)+reportRange(36,332,747.5,316,331);
   const trend=out+'</g>';
   out='<g transform="translate(201 -141) scale(1.48)">';
@@ -113,8 +113,8 @@ function reportDividend(part) {
     out+=reportMark('categorical',1,`Total Cash Dividends ${2018+i}`,reportRect(cash.x,cash.y,cash.width,cash.height,'currentColor'));
     out+=reportMuted(payoutRatioPoints[i][0],1127.4,String(2018+i),4.5,'middle');
   });
-  out+=reportMark('categorical',6,'Payout Ratio',reportPath('M'+payoutRatioPoints.map(v=>v.join(' ')).join('L'),'currentColor',1)+payoutRatioPoints.map(([x,y])=>`<circle cx="${x}" cy="${y}" r="1.5" fill="currentColor"/>`).join(''));
-  payoutRatioPoints.forEach(([x,y],i)=>{out+=reportText(x,y-4.8,['22.75%','25.21%','24.13%','15.03%','14.65%','15.58%','16.63%','13.44%'][i],4.4,{fill:reportColor('categorical',6),anchor:'middle'});});
+  out+=reportMark('line',0,'Payout Ratio',reportPath('M'+payoutRatioPoints.map(v=>v.join(' ')).join('L'),'currentColor',1)+payoutRatioPoints.map(([x,y])=>`<circle cx="${x}" cy="${y}" r="1.5" fill="currentColor"/>`).join(''));
+  payoutRatioPoints.forEach(([x,y],i)=>{out+=reportText(x,y-4.8,['22.75%','25.21%','24.13%','15.03%','14.65%','15.58%','16.63%','13.44%'][i],4.4,{fill:reportColor('line',0),anchor:'middle'});});
   out+=reportWatermark(38,1115)+reportRange(36,332,1138.5,176,332);
   const payout=out;out='';
   const rx=384,rw=342;

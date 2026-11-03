@@ -2,11 +2,11 @@ import { financialDividendYieldTrace, payoutIncomeBars, payoutCashBars } from '.
 const financialChartModules=[
  {id:'financial-technical',type:'radar-basic',fixture:'financial-technical',chartId:'technical-radar',height:160},
  {id:'financial-rating',type:'radar-rating',fixture:'financial-rating',chartId:'investment-rating',height:170},
- {id:'financial-trend',type:'combo',fixture:'financial-trend',chartId:'balance-trend',height:240,colorSlots:[0,1,6]},
+ {id:'financial-trend',type:'combo',fixture:'financial-trend',chartId:'balance-trend',height:240,colorSlots:[0,1]},
  {id:'financial-breakdown',type:'waterfall-data',fixture:'financial-breakdown',chartId:'balance-breakdown',height:240},
  {id:'financial-business',type:'donut',fixture:'financial-business',chartId:'revenue-breakdown-business',height:'auto',summary:{label:'Total',value:'109.42B'}},
  {id:'financial-region',type:'donut',fixture:'financial-region',chartId:'revenue-breakdown-region',height:'auto',summary:{label:'Total',value:'109.42B'}},
- {id:'financial-payout',type:'combo',fixture:'financial-payout',chartId:'dividend-payout',height:240,colorSlots:[0,1,6]},
+ {id:'financial-payout',type:'combo',fixture:'financial-payout',chartId:'dividend-payout',height:240,colorSlots:[0,1]},
  {id:'financial-yield',type:'line',fixture:'financial-yield',chartId:'dividend-yield',height:240,colorSlots:[6]}
 ].map(m=>({count:8,series:3,labels:'auto',...m}));
 // Cards have fixed heights, so low density adds the 60px gap between the Vis Lab plot heights (200 vs 140);

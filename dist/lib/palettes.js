@@ -1,17 +1,22 @@
 import { normalizeColor, hexToHsv, hsvToHex } from './colors.js';
 export const clone = value => JSON.parse(JSON.stringify(value));
-export const roles = { categorical: '分类色', semantic: '涨跌色', surface: '界面色' };
+export const roles = { categorical: '分类色', line: '折线色', semantic: '涨跌色', surface: '界面色' };
+// These roles can be reordered and resized; the others have fixed positions.
+export const seriesRoles = ['categorical', 'line'];
 export const surfaces = {
   light: ['#F5F5F6', '#FFFFFF', '#202024', '#787880', '#E6E6E9', '#EBEBEE'],
   dark: ['#111113', '#1B1B1F', '#F4F4F5', '#9B9BA4', '#323238', '#29292F']
 };
 export const surfaceNames = ['页面背景', '卡片背景', '主要文字', '次要文字', '分隔线', '网格线'];
+// Palettes without their own line colors take the end of the categorical list, last color first.
+const defaultLines = colors => colors.slice(-2).reverse().map((color, i) => ({ id: `line-${i + 1}`, name: `折线 ${String(i + 1).padStart(2, '0')}`, hex: color.hex }));
 const colorList = (list, names, prefix) => list.map((hex, i) => ({ id: `${prefix}-${i + 1}`, name: names?.[i] || `系列 ${String(i + 1).padStart(2, '0')}`, hex: normalizeColor(hex) }));
-export function createPalette({ id, name, light, dark, names, up = '#009B67', down = '#FF381A', darkUp = up, darkDown = down, background, card = background, source = '自定义色板', availableThemes = ['light', 'dark'] }) {
+export function createPalette({ id, name, light, dark, names, lines, up = '#009B67', down = '#FF381A', darkUp = up, darkDown = down, background, card = background, source = '自定义色板', availableThemes = ['light', 'dark'] }) {
   return {
     schemaVersion: 1, id, name, source, availableThemes,
     themes: Object.fromEntries(['light', 'dark'].map(theme => [theme, {
       categorical: colorList(theme === 'light' ? (light || dark) : (dark || light), names, 'category'),
+      line: lines ? colorList(lines, lines.map((_, i) => `折线 ${String(i + 1).padStart(2, '0')}`), 'line') : defaultLines(colorList(theme === 'light' ? (light || dark) : (dark || light), names, 'category')),
       semantic: colorList(theme === 'light' ? [up, down] : [darkUp, darkDown], ['上涨', '下跌'], 'state'),
       surface: colorList(background ? [background[theme], card[theme], ...surfaces[theme].slice(2)] : surfaces[theme], surfaceNames, 'surface')
     }]))
@@ -29,6 +34,8 @@ export function validatePalette(input) {
   for (const theme of ['light', 'dark']) {
     if (!input.themes[theme]) throw new Error(`缺少 ${theme} 主题配置`);
     for (const role of Object.keys(roles)) {
+      // Palettes saved before line colors existed get the same default as a new palette.
+      if (role === 'line' && !input.themes[theme].line) { output.themes[theme].line = defaultLines(output.themes[theme].categorical); continue; }
       output.themes[theme][role] = validateColors(input.themes[theme][role]).map((c, i) => ({ ...c, id: `${role}-${i + 1}` }));
     }
     if (output.themes[theme].surface.length !== 6) throw new Error('界面色需要包含 6 个颜色');
@@ -75,22 +82,22 @@ export function writeBackDraft({ draft, saved, presetEdits }, presets) {
   else delete presetEdits[draft.id];
 }
 // A position is one series in both themes, so structure edits apply to light and dark together.
-const categoricalLists = palette => ['light', 'dark'].map(theme => palette.themes[theme].categorical);
-export function moveCategoricalColor(palette, from, to) {
-  for (const list of categoricalLists(palette)) if (from < list.length && to < list.length) list.splice(to, 0, list.splice(from, 1)[0]);
+const seriesLists = (palette, role) => ['light', 'dark'].map(theme => palette.themes[theme][role]);
+export function moveSeriesColor(palette, from, to, role = 'categorical') {
+  for (const list of seriesLists(palette, role)) if (from < list.length && to < list.length) list.splice(to, 0, list.splice(from, 1)[0]);
 }
-export function removeCategoricalColor(palette, index) {
-  for (const list of categoricalLists(palette)) if (list.length > 1 && index < list.length) list.splice(index, 1);
+export function removeSeriesColor(palette, index, role = 'categorical') {
+  for (const list of seriesLists(palette, role)) if (list.length > 1 && index < list.length) list.splice(index, 1);
 }
-export function addCategoricalColor(palette) {
-  const lists = categoricalLists(palette);
+export function addSeriesColor(palette, role = 'categorical') {
+  const lists = seriesLists(palette, role), label = role === 'line' ? '折线' : '系列';
   const taken = new Set(lists.flat().map(color => color.name));
   let number = Math.max(...lists.map(list => list.length)) + 1;
-  while (taken.has(`系列 ${String(number).padStart(2, '0')}`)) number++;
+  while (taken.has(`${label} ${String(number).padStart(2, '0')}`)) number++;
   for (const list of lists) {
     // A golden-angle hue step keeps the new color distinct from the one before it.
     const [h, s, v] = hexToHsv(list.at(-1).hex);
-    list.push({ id: `category-new-${number}`, name: `系列 ${String(number).padStart(2, '0')}`, hex: hsvToHex((h + 137.5) % 360, Math.max(s, 35), Math.min(95, Math.max(v, 45))) });
+    list.push({ id: `${role}-new-${number}`, name: `${label} ${String(number).padStart(2, '0')}`, hex: hsvToHex((h + 137.5) % 360, Math.max(s, 35), Math.min(95, Math.max(v, 45))) });
   }
 }
 // Where an index ends up after moving one item, so the open editor stays on the same color.

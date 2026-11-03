@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeColor, hsvToHex, hexToHsv } from '../dist/lib/colors.js';
-import { parseImport, validatePalette, createPalette, restorePalette, restoreSavedPalettes, restorePresetEdits, countColorChanges, writeBackDraft, moveCategoricalColor, removeCategoricalColor, addCategoricalColor, indexAfterMove } from '../dist/lib/palettes.js';
+import { parseImport, validatePalette, createPalette, restorePalette, restoreSavedPalettes, restorePresetEdits, countColorChanges, writeBackDraft, moveSeriesColor, removeSeriesColor, addSeriesColor, indexAfterMove } from '../dist/lib/palettes.js';
 import { presets } from '../dist/data/presets.js';
 
 test('normalize supported color formats without silently clipping invalid colors', () => {
@@ -106,7 +106,7 @@ test('saved palettes from a snapshot drop invalid or anonymous entries and toler
 
 test('moving a categorical color keeps each series aligned across themes', () => {
   const palette = structuredClone(presets[1]), hex = theme => palette.themes[theme].categorical.map(c => c.hex);
-  moveCategoricalColor(palette, 0, 2);
+  moveSeriesColor(palette, 0, 2);
   assert.deepEqual(hex('light').slice(0, 3), ['#EB6834', '#1BAF7A', '#2A78D6']);
   assert.deepEqual(hex('dark').slice(0, 3), ['#D95926', '#199E70', '#3987E5']);
   assert.equal(palette.themes.light.categorical[2].name, '蓝');
@@ -121,12 +121,12 @@ test('the open editor follows the same color after a move', () => {
 });
 test('removing and adding colors stay valid in both themes and never empty a palette', () => {
   const palette = structuredClone(presets[3]);
-  removeCategoricalColor(palette, 0);
+  removeSeriesColor(palette, 0);
   assert.equal(palette.themes.light.categorical[0].hex, '#19B299');
   assert.equal(palette.themes.dark.categorical[0].hex, '#73E6D5');
-  for (let i = 0; i < 10; i++) removeCategoricalColor(palette, 0);
+  for (let i = 0; i < 10; i++) removeSeriesColor(palette, 0);
   assert.equal(palette.themes.light.categorical.length, 1);
-  addCategoricalColor(palette); addCategoricalColor(palette);
+  addSeriesColor(palette); addSeriesColor(palette);
   const { light, dark } = palette.themes;
   assert.equal(light.categorical.length, 3); assert.equal(dark.categorical.length, 3);
   assert.equal(new Set(light.categorical.map(c => c.name)).size, 3);
@@ -136,7 +136,7 @@ test('removing and adding colors stay valid in both themes and never empty a pal
 });
 test('adding to a gray palette still produces a visible color', () => {
   const palette = createPalette({ id: 'gray', name: '灰', light: ['#808080'] });
-  addCategoricalColor(palette);
+  addSeriesColor(palette);
   const added = palette.themes.light.categorical[1].hex;
   assert.notEqual(added, '#808080'); assert.match(added, /^#[0-9A-F]{6}$/);
 });
@@ -181,6 +181,25 @@ test('color changes count every role in both themes and added colors', () => {
   const a = structuredClone(presets[0]), b = structuredClone(a);
   assert.equal(countColorChanges(a, b), 0);
   b.themes.dark.surface[0].hex = '#000001';
-  addCategoricalColor(b);
+  addSeriesColor(b);
   assert.equal(countColorChanges(a, b), 3);
+});
+
+test('line colors are their own role and palettes saved without them get a default', () => {
+  assert.deepEqual(presets[0].themes.light.line.map(c => c.hex), ['#FF7040', '#9EA9C7']);
+  for (const preset of presets) for (const theme of ['light', 'dark']) assert.ok(preset.themes[theme].line.length >= 1);
+  const old = structuredClone(presets[1]);
+  delete old.themes.light.line; delete old.themes.dark.line;
+  const restored = validatePalette(old), colors = restored.themes.dark.categorical;
+  assert.deepEqual(restored.themes.dark.line.map(c => c.hex), [colors.at(-1).hex, colors.at(-2).hex]);
+});
+test('line colors can be reordered and resized without touching the categorical list', () => {
+  const palette = structuredClone(presets[0]), categorical = structuredClone(palette.themes.light.categorical);
+  moveSeriesColor(palette, 0, 1, 'line');
+  assert.deepEqual(palette.themes.dark.line.map(c => c.hex), ['#9EA9C7', '#FF7040']);
+  addSeriesColor(palette, 'line');
+  assert.equal(palette.themes.light.line.at(-1).name, '折线 03');
+  removeSeriesColor(palette, 0, 'line');
+  assert.equal(palette.themes.light.line.length, 2);
+  assert.deepEqual(palette.themes.light.categorical, categorical);
 });

@@ -1,5 +1,5 @@
 import { fitWaterfallBarWidth } from './waterfall-layout.js';
-import { chartColorAt, chartColorSlot, completePiePreview } from './chart-palette.js';
+import { chartColorAt, chartColorSlot, seriesPaletteSlots, completePiePreview } from './chart-palette.js';
 import { applyComparisonFixture } from './comparison-fixtures.js';
 import { applyChartLineWidth, installChartTexture } from './chart-appearance.js';
 import { financialChartConfig, financialPercent } from '../dist/data/financial-shared.js';
@@ -31,11 +31,12 @@ function mountCompactChart(target,module,palette,mode,onColor,density='compact',
   const colors=palette.themes[mode];host.__paletteLabColors=colors.categorical.map(c=>c.hex);host.__paletteLabNeutral=colors.surface[3].hex;
   if(module.colorSlots)host.__paletteLabColors=module.colorSlots.map(i=>colors.categorical[i]?.hex||host.__paletteLabNeutral);
   if(module.fixture==='aime-duration')host.__paletteLabColors=Array(12).fill(colors.categorical[0].hex);
-  host.__paletteLabResolveColor=index=>chartColorAt(host.__paletteLabColors,index,host.__paletteLabNeutral);
+  const lineColors=colors.line.map(c=>c.hex);
+  host.__paletteLabSeriesColors=series=>seriesPaletteSlots(series).map(({role,index})=>chartColorAt(role==='line'?lineColors:host.__paletteLabColors,index,host.__paletteLabNeutral));
   // Preserve the upstream axis, legend and grid tokens until the designer edits that surface role.
   for(const [index,variables] of [[1,['--color-background-layer1']],[2,['--color-text-primary']],[3,['--color-text-secondary','--color-text-axis','--color-text-legend']],[4,['--color-visualization-divider-deep']],[5,['--color-visualization-divider']]])
     if(colors.surface[index].hex!==surfaces[mode][index])for(const variable of variables)host.style.setProperty(variable,colors.surface[index].hex);
-  for(const [key,value] of Object.entries({'--color-sankey-income':colors.categorical[0].hex,'--color-sankey-profit':colors.semantic[0].hex,'--color-sankey-expense':colors.semantic[1].hex,'--color-price-up':colors.semantic[0].hex,'--color-price-down':colors.semantic[1].hex}))host.style.setProperty(key,value);
+  for(const [key,value] of Object.entries({'--color-world-heatmap-primary':colors.categorical[0].hex,'--color-sankey-income':colors.categorical[0].hex,'--color-sankey-profit':colors.semantic[0].hex,'--color-sankey-expense':colors.semantic[1].hex,'--color-price-up':colors.semantic[0].hex,'--color-price-down':colors.semantic[1].hex}))host.style.setProperty(key,value);
   if(module.fixture==='aime-growth')host.__paletteLabFormat=v=>v==null?'—':`${Math.round(v*100)}%`;
   if(['financial-trend','financial-payout'].includes(module.fixture)){
     host.__paletteLabFormat=v=>v!==0&&Math.abs(v)<2?financialPercent(v):new Intl.NumberFormat('en-US',{maximumFractionDigits:2}).format(v/1e9)+(v===0?'':'B');
@@ -56,6 +57,7 @@ function mountCompactChart(target,module,palette,mode,onColor,density='compact',
   const fixture=financialChartConfig(module)||aimeChartConfig(module);if(fixture)Object.assign(cfg,fixture);
   cfg=completePiePreview(cfg,module);
   const instance=CHARTS[example.chart](host,cfg);
+  instance.ready?.catch(()=>{host.textContent='地图加载失败，请检查网络';});
   if(fillRow){target.style.minHeight=`${host.getBoundingClientRect().height}px`;target.dataset.rowFill='';host.classList.add('row-fill');}
   const texture=installChartTexture(host,module,mode);
   const summary=module.summary||(module.fixture==='aime-factors'?{label:'Total',value:(cfg.items.reduce((sum,item)=>sum+item.value,0)/1e6).toFixed(2)+'M'}:null);
@@ -67,7 +69,7 @@ function mountCompactChart(target,module,palette,mode,onColor,density='compact',
   }
   const keys=(cfg.items||cfg.series||cfg.entities||cfg.root?.children||[]).map(item=>typeof item==='string'?item:item.name);
   // Double click picks a palette slot; ordinary click keeps the upstream chart/legend interaction.
-  host.addEventListener('dblclick',event=>{const group=event.target.closest('[data-key]');if(group){const index=keys.indexOf(group.dataset.key);const slot=example.chart==='treemap'?0:index;const paletteIndex=module.fixture==='aime-duration'?0:chartColorSlot(slot,module.colorSlots,colors.categorical.length);if(paletteIndex>=0&&paletteIndex<colors.categorical.length)onColor(paletteIndex);}});
+  host.addEventListener('dblclick',event=>{const group=event.target.closest('[data-key]');if(group){const index=keys.indexOf(group.dataset.key);const seat=cfg.series&&seriesPaletteSlots(cfg.series)[index];if(seat?.role==='line'){onColor(seat.index%lineColors.length,'line');return;}const slot=example.chart==='treemap'?0:seat?seat.index:index;const paletteIndex=module.fixture==='aime-duration'?0:chartColorSlot(slot,module.colorSlots,colors.categorical.length);if(paletteIndex>=0&&paletteIndex<colors.categorical.length)onColor(paletteIndex);}});
   return {destroy(){texture.destroy();summaryObserver?.disconnect();instance.destroy();shadow.replaceChildren();}};
 }
 export { mountCompactChart, compactCatalog };

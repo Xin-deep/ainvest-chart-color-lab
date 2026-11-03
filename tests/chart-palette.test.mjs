@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {chartColorAt,chartColorSlot,completePiePreview} from '../scripts/chart-palette.js';
+import {chartColorAt,chartColorSlot,seriesPaletteSlots,completePiePreview} from '../scripts/chart-palette.js';
 import {EXAMPLES,buildConfig} from '../dist/vendor/vis-lab/source/demos/examples.js';
 
 test('overflow items reuse the palette in order and pick the same editable color',()=>{
@@ -12,6 +12,13 @@ test('overflow items reuse the palette in order and pick the same editable color
  assert.equal(chartColorAt([],1,'#999999'),'#999999');
  assert.equal(chartColorSlot(0,[2,0,1],3),2);
  assert.equal(chartColorSlot(-1,null,3),-1);
+});
+
+test('combination charts count bars and lines separately, other charts stay categorical',()=>{
+ const line={type:'line'},bar={type:'bar'};
+ assert.deepEqual(seriesPaletteSlots([bar,line,bar,line]),[{role:'categorical',index:0},{role:'line',index:0},{role:'categorical',index:1},{role:'line',index:1}]);
+ assert.deepEqual(seriesPaletteSlots([line,line]),[{role:'categorical',index:0},{role:'categorical',index:1}]);
+ assert.deepEqual(seriesPaletteSlots([{type:'pie'}]),[{role:'categorical',index:0}]);
 });
 
 test('all generic pie legend entries have visible values at both data volumes',()=>{
