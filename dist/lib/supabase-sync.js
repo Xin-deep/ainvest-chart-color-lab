@@ -1,6 +1,7 @@
 // Supabase owns persistence/auth/Realtime; private SQL functions check capabilities and revisions.
 function createSupabaseLiveClient(config, { sdkLoader = () => import(new URL('../vendor/supabase.bundle.js', import.meta.url)), setIntervalFn = setInterval, clearIntervalFn = clearInterval } = {}) {
   let initialization;
+  const joined = new Set();
   const ready = () => initialization ||= (async () => {
     const { createClient } = await sdkLoader();
     const client = createClient(config.url, config.publishableKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
@@ -30,7 +31,7 @@ function createSupabaseLiveClient(config, { sdkLoader = () => import(new URL('..
   };
   const adapter = {
     create: (snapshot, token) => rpc('aime_create_live', { p_snapshot: snapshot, p_edit_token: token }),
-    get: id => rpc('aime_join_live', { p_id: id }),
+    get: async id => { const record = await rpc('aime_join_live', { p_id: id }); joined.add(id); return record; },
     update: (id, token, revision, snapshot) => rpc('aime_update_live', { p_id: id, p_edit_token: token, p_revision: revision, p_snapshot: snapshot }),
     subscribe(id, onSnapshot, onStatus) {
       let stopped = false, client, channel, timer, reading = false, connected = false;
@@ -46,7 +47,7 @@ function createSupabaseLiveClient(config, { sdkLoader = () => import(new URL('..
       (async () => {
         client = await ready();
         // Join first so SELECT RLS and Realtime both authorize exactly this session.
-        deliver(await adapter.get(id));
+        if (!joined.has(id)) deliver(await adapter.get(id));
         if (stopped) return;
         channel = client.channel('aime-live:' + id + ':' + crypto.randomUUID());
         channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'aime_live_sessions', filter: `id=eq.${id}` }, payload => {

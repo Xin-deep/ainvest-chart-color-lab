@@ -1,5 +1,3 @@
-import {renderWorkspaceTerminal,applyWorkspacePalette} from './scenes/workspace-terminal.js';
-import { renderTerminalScene, applyTerminalPalette } from './scenes/terminal.js';
 import { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, saveViewerPalette, isQuietLiveStatus, discoverSyncBase, createLiveClient } from './lib/live-sync.js';
 import { encodeMobilePreview, decodeMobilePreview } from './lib/mobile-preview.js';
 import { bindColorJsPicker } from './lib/colorjs-picker.js';
@@ -9,7 +7,7 @@ import { defaultCheckSettings, normalizeCheckSettings, buildPaletteCheckReport }
 import { renderColorChecks, renderColorCheckBadges } from './scenes/color-checks.js';
 import { hexToOklch, checkOklch, oklchCss } from './lib/oklch.js';
 import { presets } from './data/presets.js';
-import { clone, roles, validatePalette, restorePalette, restoreSavedPalettes, parseImport, parseTextPalette } from './lib/palettes.js';
+import { clone, roles, validatePalette, restorePalette, restoreSavedPalettes, moveCategoricalColor, removeCategoricalColor, addCategoricalColor, indexAfterMove, parseImport, parseTextPalette } from './lib/palettes.js';
 import { normalizeColor, hexToHsv, hsvToHex, rgbText } from './lib/colors.js';
 import { renderFinancialScene, applyFinancialPalette } from './scenes/financial.js';
 
@@ -17,11 +15,11 @@ import { compactTypes, newCompactModule, defaultCompactBoard, validateCompactBoa
 
 import { defaultAimeBoard, validateAimeBoard, renderAimeScene, aimeBoardPanel, applyAimePalette } from './scenes/aime.js';
 
-import { financialChartModules } from './data/financial-shared.js';
+import { financialChartModules, financialModulesFor } from './data/financial-shared.js';
 
 import { defaultFinancialBoard, validateFinancialBoard, renderFinancialExtras } from './scenes/financial-extras.js';
 
-const VERSION = '0.16.1';
+const VERSION = '0.17.0';
 const STORAGE_KEY = 'ainvest-palette-lab:v1';
 const scenes = [
   { id: 'financial', name: '财报分析', en: 'Financial analysis', icon: 'file' },
@@ -31,6 +29,8 @@ const scenes = [
   { id: 'workspace', name: 'Terminal', en: 'Terminal workspace', icon: 'grid' }
 ];
 const paths = {
+  grip: '<path d="M6 9h12M6 15h12"/>',
+  trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
   logo: '<path d="M5 18V6h5a4 4 0 0 1 0 8H8"/><path d="M14 18h5M17 6v12"/>',
   pie: '<path d="M12 3v9h9"/><path d="M20.3 15.5A9 9 0 1 1 8.5 3.7M15 3.5a9 9 0 0 1 5.5 5.5H15z"/>',
   chart: '<path d="M4 4v16h16M7 14l4-5 4 3 5-7"/>',
@@ -59,7 +59,7 @@ const paths = {
 };
 const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.grid}</svg>`;
 const esc = text => String(text ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let state = { baseline: clone(presets[0]), draft: clone(presets[0]), scene: 'financial', theme: 'light', mode: 'draft', role: 'categorical', selected: 0, panel: 'palette', editorOpen: false, chartStyleOpen: false, collapsed: innerWidth < 650, previewFullscreen: new URLSearchParams(location.search).get('preview') === 'fullscreen', saved: [], globalChartStyle: normalizeGlobalChartStyle(), checkSettings: defaultCheckSettings(), financialBoard: defaultFinancialBoard(), financialDensity: 'compact', customTemplate:'all', comparisonBoards:{}, customBoard: defaultCompactBoard(), aimeBoard: defaultAimeBoard() };
+let state = { baseline: clone(presets[0]), draft: clone(presets[0]), scene: 'financial', theme: 'light', mode: 'draft', role: 'categorical', selected: 0, panel: 'palette', editorOpen: false, chartStyleOpen: false, editorModel: 'oklch', collapsed: innerWidth < 650, previewFullscreen: new URLSearchParams(location.search).get('preview') === 'fullscreen', saved: [], globalChartStyle: normalizeGlobalChartStyle(), checkSettings: defaultCheckSettings(), financialBoard: defaultFinancialBoard(), financialDensity: 'compact', customTemplate:'all', comparisonBoards:{}, customBoard: defaultCompactBoard(), aimeBoard: defaultAimeBoard() };
 let storageAvailable = true, loaded = false;
 try {
   const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -71,7 +71,7 @@ try {
       for (const theme of ['light', 'dark']) if (p.themes[theme].categorical.length === 8 && p.themes[theme].categorical[7].hex === '#9EA9C7') p.themes[theme].categorical.pop();
       p.source = presets[0].source;
     }
-    state = { ...state, customTemplate: [...comparisonTemplates.map(t=>t.id),'free'].includes(stored.customTemplate)?stored.customTemplate:'all', comparisonBoards:validateComparisonBoards(stored.comparisonBoards), globalChartStyle: normalizeGlobalChartStyle(stored.globalChartStyle), checkSettings: normalizeCheckSettings(stored.checkSettings), financialBoard: validateFinancialBoard(stored.financialBoard), financialDensity: stored.financialDensity === 'standard' ? 'standard' : 'compact', customBoard: validateCompactBoard(stored.customBoard), aimeBoard: validateAimeBoard(stored.aimeBoard), baseline: base, draft, scene: scenes.some(s => s.id === stored.scene) ? stored.scene : 'financial', collapsed: typeof stored.collapsed === 'boolean' ? stored.collapsed : state.collapsed, theme: ['light', 'dark'].includes(stored.theme) ? stored.theme : 'light', saved: (stored.saved || []).slice(-30).flatMap(p => { try { const v = validatePalette(p); v.id = p.id; return [v]; } catch { return []; } }) };
+    state = { ...state, editorModel: stored.editorModel === 'hsb' ? 'hsb' : 'oklch', customTemplate: [...comparisonTemplates.map(t=>t.id),'free'].includes(stored.customTemplate)?stored.customTemplate:'all', comparisonBoards:validateComparisonBoards(stored.comparisonBoards), globalChartStyle: normalizeGlobalChartStyle(stored.globalChartStyle), checkSettings: normalizeCheckSettings(stored.checkSettings), financialBoard: validateFinancialBoard(stored.financialBoard), financialDensity: stored.financialDensity === 'standard' ? 'standard' : 'compact', customBoard: validateCompactBoard(stored.customBoard), aimeBoard: validateAimeBoard(stored.aimeBoard), baseline: base, draft, scene: scenes.some(s => s.id === stored.scene) ? stored.scene : 'financial', collapsed: typeof stored.collapsed === 'boolean' ? stored.collapsed : state.collapsed, theme: ['light', 'dark'].includes(stored.theme) ? stored.theme : 'light', saved: (stored.saved || []).slice(-30).flatMap(p => { try { const v = validatePalette(p); v.id = p.id; return [v]; } catch { return []; } }) };
     loaded = true;
   }
 } catch { storageAvailable = false; }
@@ -83,7 +83,8 @@ function refreshUneditedPreset() {
 }
 refreshUneditedPreset();
 const mobileEntry = document.body.dataset.mobilePreview === 'true';
-const requestedScene = new URLSearchParams(location.search).get('scene') || (mobileEntry ? 'aime' : null);
+// The phone entry only ever shows the Aime conversation; other scenes stay on the website.
+const requestedScene = mobileEntry ? 'aime' : new URLSearchParams(location.search).get('scene');
 if (scenes.some(s => s.id === requestedScene)) state.scene = requestedScene;
 let mobileShareError = '', sharedPreviewLoaded = false;
 try {
@@ -217,7 +218,7 @@ function financialDensityPanel(){
 }
 function repaintFinancialCharts(){
   const canvas=document.querySelector('#preview-canvas');
-  mountCompactBoard(canvas,{modules:[...financialChartModules,...state.financialBoard.modules],density:state.financialDensity,platform:'pc',globalChartStyle:state.globalChartStyle},current(),state.theme,(index,id)=>{if(state.financialBoard.modules.some(m=>m.id===id))state.financialBoard.selected=id;state.editorOpen=true;state.role='categorical';state.selected=index;state.panel='palette';state.collapsed=false;if(state.previewFullscreen)setPreviewFullscreen(false);else render();});
+  mountCompactBoard(canvas,{modules:[...financialModulesFor(state.financialDensity),...state.financialBoard.modules],density:state.financialDensity,platform:'pc',globalChartStyle:state.globalChartStyle},current(),state.theme,(index,id)=>{if(state.financialBoard.modules.some(m=>m.id===id))state.financialBoard.selected=id;state.editorOpen=true;state.role='categorical';state.selected=index;state.panel='palette';state.collapsed=false;if(state.previewFullscreen)setPreviewFullscreen(false);else render();});
 }
 function repaintCompactBoard() {
   const board=activeModuleBoard();
@@ -226,6 +227,17 @@ function repaintCompactBoard() {
 }
 let history = [], future = [], pendingImport = null, importedIndex = 0, editorTransaction = null, toastTimer, deletedScheme = null;
 const app = document.querySelector('#app'), modal = document.querySelector('#modal');
+// These scenes carry large reference data, so they load when opened instead of with every page.
+const lazyScenes = {
+  terminal: { load: () => import('./scenes/terminal.js'), module: null, pending: null, failed: false },
+  workspace: { load: () => import('./scenes/workspace-terminal.js'), module: null, pending: null, failed: false }
+};
+function loadLazyScene(id) {
+  const scene = lazyScenes[id];
+  if (!scene || scene.module || scene.pending || scene.failed) return;
+  scene.pending = scene.load().then(module => { scene.module = module; }).catch(() => { scene.failed = true; }).finally(() => { scene.pending = null; if (state.scene === id) render(); });
+}
+const lazySceneHolder = id => `<div class="scene-loading">${lazyScenes[id].failed ? `<p>场景加载失败，请检查网络</p><button class="button" data-action="scene-retry" data-value="${id}">重试</button>` : '<p>正在加载场景…</p>'}</div>`;
 const sharedPalette = () => state.mode === 'baseline' ? state.baseline : state.draft;
 const viewerOptions = () => [...presets, ...live.sharedPalettes];
 // The tab that shows the owner's live colors, using the same rule as the workbench tabs.
@@ -239,7 +251,7 @@ const selectedColor = () => state.draft.themes[state.theme][state.role][state.se
 function persist() {
   if (isLiveReadOnly()) return;
   queueLiveSnapshot();
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: 1, toolVersion: VERSION, baseline: state.baseline, draft: state.draft, scene: state.scene, theme: state.theme, collapsed: state.collapsed, saved: state.saved, customTemplate:state.customTemplate, comparisonBoards:state.comparisonBoards, customBoard: state.customBoard, aimeBoard: state.aimeBoard, financialDensity: state.financialDensity, financialBoard: state.financialBoard, checkSettings: state.checkSettings, globalChartStyle: state.globalChartStyle })); storageAvailable = true; }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: 1, toolVersion: VERSION, baseline: state.baseline, draft: state.draft, scene: state.scene, theme: state.theme, editorModel: state.editorModel, collapsed: state.collapsed, saved: state.saved, customTemplate:state.customTemplate, comparisonBoards:state.comparisonBoards, customBoard: state.customBoard, aimeBoard: state.aimeBoard, financialDensity: state.financialDensity, financialBoard: state.financialBoard, checkSettings: state.checkSettings, globalChartStyle: state.globalChartStyle })); storageAvailable = true; }
   catch { storageAvailable = false; }
 }
 function toast(message) {
@@ -295,6 +307,7 @@ function selectPreviewModule(id){
 }
 function render() {
   cancelAnimationFrame(compactColorFrame);
+  loadLazyScene(state.scene);
   const scroll = document.querySelector('.side-scroll')?.scrollTop || 0;
   const paletteTabsScroll = document.querySelector('.palette-tabs')?.scrollTop || 0;
   const viewerPalettesScroll = document.querySelector('.aime-viewer-palettes')?.scrollLeft || 0;
@@ -315,12 +328,12 @@ function render() {
       ${readOnly && !live.ready ? `<div class="live-viewer-notice"><p>${esc(live.error || '正在载入共享方案…')}</p>${live.error?'<button class="button" data-action="live-reload">重试</button>':''}</div>` : ''}
       ${mobileAime && !state.collapsed ? '<button class="aime-workbench-backdrop" data-action="collapse" aria-label="关闭颜色工作台"></button>' : ''}
       <section class="preview-workspace" aria-label="场景预览工作区">
-        <div class="preview-canvas ${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? 'has-scene' : ''}" id="preview-canvas" role="region" aria-label="${scene.name}${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? '，图表预览' : '，内容待添加'}" style="--canvas-bg:${palette.themes[state.theme].surface[0].hex}" data-scene="${state.scene}" data-theme="${state.theme}">${state.scene === 'financial' ? renderFinancialScene(renderFinancialExtras(state.financialBoard)) : state.scene === 'custom' ? renderCompactBoard(activeCustomBoard(),state.customTemplate==='free'?{}:{title:comparisonTemplates.find(t=>t.id===state.customTemplate).name,description:'全部 25 种图表 · 每种少量 / 大量数据对比'}) : state.scene === 'aime' ? renderAimeScene(state.aimeBoard,state.theme) : state.scene === 'terminal' ? renderTerminalScene() : state.scene === 'workspace' ? renderWorkspaceTerminal() : ''}</div>
+        <div class="preview-canvas ${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? 'has-scene' : ''}" id="preview-canvas" role="region" aria-label="${scene.name}${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? '，图表预览' : '，内容待添加'}" style="--canvas-bg:${palette.themes[state.theme].surface[0].hex}" data-scene="${state.scene}" data-theme="${state.theme}">${state.scene === 'financial' ? renderFinancialScene(renderFinancialExtras(state.financialBoard)) : state.scene === 'custom' ? renderCompactBoard(activeCustomBoard(),state.customTemplate==='free'?{}:{title:comparisonTemplates.find(t=>t.id===state.customTemplate).name,description:'全部 25 种图表 · 每种少量 / 大量数据对比'}) : state.scene === 'aime' ? renderAimeScene(state.aimeBoard,state.theme) : state.scene === 'terminal' ? (lazyScenes.terminal.module?.renderTerminalScene() ?? lazySceneHolder('terminal')) : state.scene === 'workspace' ? (lazyScenes.workspace.module?.renderWorkspaceTerminal() ?? lazySceneHolder('workspace')) : ''}</div>
       </section>
       <aside class="sidebar" id="color-workbench" aria-label="颜色操作面板" ${readOnly?'inert':''}>
         <div class="sidebar-header">
           <div class="sidebar-title"><div class="workbench-heading"><span>颜色工作台</span><small>Palette Lab <span class="mono">v${VERSION}</span></small></div><div class="workbench-history"><button class="icon-button" data-action="undo" title="撤销（⌘/Ctrl Z）" aria-label="撤销" ${!history.length ? 'disabled' : ''}>${icon('undo')}</button><button class="icon-button" data-action="redo" title="重做（⌘/Ctrl Shift Z）" aria-label="重做" ${!future.length ? 'disabled' : ''}>${icon('redo')}</button><button class="icon-button" data-action="collapse" title="收起颜色工作台" aria-label="收起颜色工作台" aria-expanded="true">${icon('panel')}</button></div></div>
-          <nav class="workbench-scenes" aria-label="产品使用场景">${scenes.map(s => `<button class="scene-tab ${s.id === state.scene ? 'active' : ''}" data-action="scene" data-value="${s.id}" aria-current="${s.id === state.scene ? 'page' : 'false'}">${s.name}</button>`).join('')}</nav>
+          ${mobileEntry ? '' : `<nav class="workbench-scenes" aria-label="产品使用场景">${scenes.map(s => `<button class="scene-tab ${s.id === state.scene ? 'active' : ''}" data-action="scene" data-value="${s.id}" aria-current="${s.id === state.scene ? 'page' : 'false'}">${s.name}</button>`).join('')}</nav>`}
           <div class="workbench-controls"><div class="segment" aria-label="预览主题"><button data-action="theme" data-value="light" class="${state.theme === 'light' ? 'active' : ''}" aria-pressed="${state.theme === 'light'}">${icon('sun')}浅色</button><button data-action="theme" data-value="dark" class="${state.theme === 'dark' ? 'active' : ''}" aria-pressed="${state.theme === 'dark'}">${icon('moon')}深色</button></div><div class="segment compare-switch" aria-label="调整前后对比"><button data-action="mode" data-value="baseline" class="${state.mode === 'baseline' ? 'active' : ''}" aria-pressed="${state.mode === 'baseline'}">A 原始</button><button data-action="mode" data-value="draft" class="${state.mode === 'draft' ? 'active' : ''}" aria-pressed="${state.mode === 'draft'}">B 调整后</button></div></div>
           <div class="workbench-actions"><button class="button primary" data-action="save" aria-label="保存方案">${icon('save')}保存方案</button></div>
           ${state.scene==='aime'?'<button class="button mobile-share-button" data-action="share-mobile">分享手机预览</button>':''}
@@ -351,9 +364,10 @@ function render() {
   if (editor) document.querySelector(".sidebar-footer").before(editor);
   const canvas = document.querySelector('#preview-canvas');
   if (state.scene === 'financial') { applyFinancialPalette(canvas, palette, state.theme); repaintFinancialCharts(); }
-  if (state.scene === 'terminal') applyTerminalPalette(canvas,palette,state.theme,state.globalChartStyle);
-  if (state.scene === 'workspace') applyWorkspacePalette(canvas,palette,state.theme,state.globalChartStyle);
-  if (['custom','aime'].includes(state.scene)) repaintCompactBoard();
+  if (state.scene === 'terminal') lazyScenes.terminal.module?.applyTerminalPalette(canvas,palette,state.theme,state.globalChartStyle);
+  if (state.scene === 'workspace') lazyScenes.workspace.module?.applyWorkspacePalette(canvas,palette,state.theme,state.globalChartStyle);
+  // Charts stay hidden until a shared link connects, so skip drawing them twice.
+  if (['custom','aime'].includes(state.scene) && !(isLiveReadOnly() && !live.ready)) repaintCompactBoard();
   const sceneScroller = canvas.querySelector('.financial-content-frame, .terminal-content-frame, .workspace-terminal-scroll, .compact-board-scroll, .aime-content-scroll') || canvas;
   const newSceneHeight = sceneScroller.scrollHeight;
   if (['custom','aime'].includes(state.scene)) {
@@ -388,10 +402,10 @@ function oklchDetails(hex){
 function palettePanel() {
   const p = current(), colors = p.themes[state.theme][state.role], report=buildPaletteCheckReport(p,state.theme,state.role,state.checkSettings);
   state.selected = Math.min(state.selected, colors.length - 1);
-  const color = colors[state.selected], base = state.baseline.themes[state.theme][state.role][state.selected], hsv = hexToHsv(color.hex), readonly = state.mode === 'baseline';
+  const color = colors[state.selected], base = state.baseline.themes[state.theme][state.role][state.selected], hsv = hexToHsv(color.hex), readonly = state.mode === 'baseline', editable = state.role === 'categorical' && !readonly, hsb = state.editorModel === 'hsb';
   return `<section class="panel-section"><div class="section-heading"><span class="section-label">Palette / 当前色板</span><button class="text-button" data-action="reset" ${!changedCount() ? 'disabled' : ''}>恢复原始</button></div><div class="active-palette-name">${esc(p.name)}</div><div class="preset-source">${esc(p.source)}</div>${!p.availableThemes.includes(state.theme) ? '<div class="theme-warning">当前主题为实验复用色值，未经竞品来源确认。</div>' : ''}<div class="reference-caption">${icon('lock')}A 为冻结基线，B 为当前调整</div></section>
-    <section class="panel-section"><div class="section-heading"><span class="section-label">Colors / 颜色角色</span><span class="mono muted" style="font-size:9px">${state.theme === 'light' ? 'LIGHT' : 'DARK'}</span></div><div class="role-tabs" aria-label="颜色角色">${Object.entries(roles).map(([id, name]) => `<button class="${state.role === id ? 'active' : ''}" data-action="role" data-value="${id}" aria-pressed="${state.role === id}">${name}<small>${p.themes[state.theme][id].length}</small></button>`).join('')}</div><div class="color-list">${colors.map((c, i) => `<button class="color-row ${state.editorOpen && state.selected === i ? 'selected' : ''}" data-action="color" data-value="${i}" aria-label="${esc(c.name)} ${c.hex}" aria-pressed="${state.editorOpen && state.selected === i}" aria-expanded="${state.editorOpen && state.selected === i}"><span class="color-index mono">${String(i + 1).padStart(2, '0')}</span><i class="swatch" style="background:${c.hex}" data-swatch="${i}"></i><span class="color-description"><span class="color-main"><span class="color-name">${esc(c.name)}</span><span class="color-value mono" data-color-value="${i}">${c.hex}</span></span><span class="color-oklch mono" data-oklch="${i}">${compactOklch(c.hex)}</span><span class="color-check-badges" data-color-checks="${i}">${renderColorCheckBadges(report.entries[i],report)}</span></span>${state.mode === 'draft' && c.hex !== state.baseline.themes[state.theme][state.role][i]?.hex ? '<i class="changed-dot"></i>' : ''}${state.editorOpen && state.selected === i ? icon('sliders') : ''}</button>`).join('')}</div><div class="colors-note">${icon('info')}仅修改当前角色，其他用途保持独立</div></section>
-    ${state.editorOpen ? `<section class="panel-section color-editor"><div class="editor-heading"><span class="editor-name"><span>编辑</span>${esc(color.name)}</span><div class="editor-tools"><span class="mono" data-editor-model>HSB</span><button class="icon-button" data-action="editor-close" aria-label="收起颜色编辑器">${icon('close')}</button></div></div><div class="color-inputs"><label class="picker-wrap" style="background:${color.hex}" title="打开颜色选择器"><input type="color" id="native-color" value="${color.hex}" aria-label="${esc(color.name)}颜色选择器" ${readonly ? 'disabled' : ''}></label><label class="hex-field"><span>HEX</span><input class="mono" id="hex-input" value="${color.hex}" maxlength="64" aria-label="色值，支持 HEX、RGB、HSL" spellcheck="false" ${readonly ? 'disabled' : ''}></label><button class="icon-button" data-action="copy-color" title="复制色值" aria-label="复制色值">${icon('copy')}</button></div><div class="colorjs-picker-shell" data-colorjs-picker><color-picker space="oklch" color="${color.hex}" gamut="none" aria-label="OKLCH 颜色选择器"><span slot="color-space" class="picker-space-name">OKLCH</span></color-picker><div class="hsb-fallback">${['色相', '饱和', '明度'].map((label, i) => `<div class="slider-row"><label for="slider-${i}">${label}</label><input id="slider-${i}" data-hsv="${i}" type="range" min="0" max="${i === 0 ? 359 : 100}" step="1" value="${Math.round(hsv[i])}" aria-label="${label}" ${readonly ? 'disabled' : ''} style="background:${i === 0 ? 'linear-gradient(to right,#ff7777,#dddd55,#55cc88,#55cddd,#7777ee,#dd77dd,#ff7777)' : i === 1 ? `linear-gradient(to right,#ddd,${hsvToHex(hsv[0], 100, 100)})` : `linear-gradient(to right,#222,${hsvToHex(hsv[0], hsv[1], 100)})`}"><span class="hsv-number mono"><input id="output-${i}" data-hsv-number="${i}" type="number" min="0" max="${i === 0 ? 359 : 100}" step="1" value="${Math.round(hsv[i])}" aria-label="${label}数值" ${readonly ? 'disabled' : ''}><span aria-hidden="true">${i === 0 ? '°' : '%'}</span></span></div>`).join('')}</div><p class="picker-status" data-picker-status role="status">正在加载 Color.js 选色器…</p></div><div class="oklch-readout" id="oklch-readout">${oklchDetails(color.hex)}<div class="color-check-badges" data-color-checks="${state.selected}">${renderColorCheckBadges(report.entries[state.selected],report)}</div></div><div class="mini-diff"><i style="background:${base?.hex || '#FFFFFF'}"></i><span class="mono">${base?.hex || '新增'}</span>${icon('arrow')}<i id="after-swatch" style="background:${color.hex}"></i><span id="after-hex" class="mono">${color.hex}</span></div><div class="editor-footnote">修改应用于${state.theme === 'light' ? '浅色' : '深色'}主题的「${roles[state.role]}」。<br>RGB <span class="mono" id="rgb-value">${rgbText(color.hex)}</span></div></section>` : ''}`;
+    <section class="panel-section"><div class="section-heading"><span class="section-label">Colors / 颜色角色</span><span class="mono muted" style="font-size:9px">${state.theme === 'light' ? 'LIGHT' : 'DARK'}</span></div><div class="role-tabs" aria-label="颜色角色">${Object.entries(roles).map(([id, name]) => `<button class="${state.role === id ? 'active' : ''}" data-action="role" data-value="${id}" aria-pressed="${state.role === id}">${name}<small>${p.themes[state.theme][id].length}</small></button>`).join('')}</div><div class="color-list">${colors.map((c, i) => `<div class="color-item">${editable && colors.length > 1 ? `<button class="color-drag" data-color-drag="${i}" aria-label="调整「${esc(c.name)}」的顺序，可拖动或按上下方向键" title="拖动调整顺序">${icon('grip')}</button>` : ''}<button class="color-row ${state.editorOpen && state.selected === i ? 'selected' : ''}" data-action="color" data-value="${i}" aria-label="${esc(c.name)} ${c.hex}" aria-pressed="${state.editorOpen && state.selected === i}" aria-expanded="${state.editorOpen && state.selected === i}"><span class="color-index mono">${String(i + 1).padStart(2, '0')}</span><i class="swatch" style="background:${c.hex}" data-swatch="${i}"></i><span class="color-description"><span class="color-main"><span class="color-name">${esc(c.name)}</span><span class="color-value mono" data-color-value="${i}">${c.hex}</span></span><span class="color-oklch mono" data-oklch="${i}">${compactOklch(c.hex)}</span><span class="color-check-badges" data-color-checks="${i}">${renderColorCheckBadges(report.entries[i],report)}</span></span>${state.mode === 'draft' && c.hex !== state.baseline.themes[state.theme][state.role][i]?.hex ? '<i class="changed-dot"></i>' : ''}${state.editorOpen && state.selected === i ? icon('sliders') : ''}</button>${editable && colors.length > 1 ? `<button class="color-remove" data-action="color-remove" data-value="${i}" aria-label="删除「${esc(c.name)}」" title="删除颜色">${icon('close')}</button>` : ''}</div>`).join('')}</div>${editable && colors.length < 64 ? '<button class="text-button color-add" data-action="color-add">＋ 添加颜色</button>' : ''}<div class="colors-note">${icon('info')}${state.role === 'categorical' ? '顺序和增删同时作用于浅色、深色；色值分主题修改' : '仅修改当前角色，其他用途保持独立'}</div></section>
+    ${state.editorOpen ? `<section class="panel-section color-editor"><div class="editor-heading"><span class="editor-name"><span>编辑</span>${esc(color.name)}</span><div class="editor-tools"><div class="segment editor-model" aria-label="调色模式">${[['oklch', 'OKLCH'], ['hsb', 'HSB']].map(([id, name]) => `<button data-action="editor-model" data-value="${id}" class="${state.editorModel === id ? 'active' : ''}" aria-pressed="${state.editorModel === id}">${name}</button>`).join('')}</div>${editable && colors.length > 1 ? `<button class="icon-button" data-action="color-remove" data-value="${state.selected}" aria-label="删除此颜色" title="删除此颜色">${icon('trash')}</button>` : ''}<button class="icon-button" data-action="editor-close" aria-label="收起颜色编辑器">${icon('close')}</button></div></div><div class="color-inputs"><label class="picker-wrap" style="background:${color.hex}" title="打开颜色选择器"><input type="color" id="native-color" value="${color.hex}" aria-label="${esc(color.name)}颜色选择器" ${readonly ? 'disabled' : ''}></label><label class="hex-field"><span>HEX</span><input class="mono" id="hex-input" value="${color.hex}" maxlength="64" aria-label="色值，支持 HEX、RGB、HSL" spellcheck="false" ${readonly ? 'disabled' : ''}></label><button class="icon-button" data-action="copy-color" title="复制色值" aria-label="复制色值">${icon('copy')}</button></div><div class="colorjs-picker-shell" ${hsb ? '' : 'data-colorjs-picker'}>${hsb ? '' : `<color-picker space="oklch" color="${color.hex}" gamut="none" aria-label="OKLCH 颜色选择器"><span slot="color-space" class="picker-space-name">OKLCH</span></color-picker>`}<div class="hsb-fallback">${['H 色相', 'S 饱和', 'B 亮度'].map((label, i) => `<div class="slider-row"><label for="slider-${i}" title="${label}">${label[0]}</label><input id="slider-${i}" data-hsv="${i}" type="range" min="0" max="${i === 0 ? 359 : 100}" step="1" value="${Math.round(hsv[i])}" aria-label="${label}" ${readonly ? 'disabled' : ''} style="background:${i === 0 ? 'linear-gradient(to right,#ff7777,#dddd55,#55cc88,#55cddd,#7777ee,#dd77dd,#ff7777)' : i === 1 ? `linear-gradient(to right,#ddd,${hsvToHex(hsv[0], 100, 100)})` : `linear-gradient(to right,#222,${hsvToHex(hsv[0], hsv[1], 100)})`}"><span class="hsv-number mono"><input id="output-${i}" data-hsv-number="${i}" type="number" min="0" max="${i === 0 ? 359 : 100}" step="1" value="${Math.round(hsv[i])}" aria-label="${label}数值" ${readonly ? 'disabled' : ''}><span aria-hidden="true">${i === 0 ? '°' : '%'}</span></span></div>`).join('')}</div>${hsb ? '' : '<p class="picker-status" data-picker-status role="status">正在加载 Color.js 选色器…</p>'}</div><div class="oklch-readout" id="oklch-readout">${oklchDetails(color.hex)}<div class="color-check-badges" data-color-checks="${state.selected}">${renderColorCheckBadges(report.entries[state.selected],report)}</div></div><div class="mini-diff"><i style="background:${base?.hex || '#FFFFFF'}"></i><span class="mono">${base?.hex || '新增'}</span>${icon('arrow')}<i id="after-swatch" style="background:${color.hex}"></i><span id="after-hex" class="mono">${color.hex}</span></div><div class="editor-footnote">修改应用于${state.theme === 'light' ? '浅色' : '深色'}主题的「${roles[state.role]}」。<br>RGB <span class="mono" id="rgb-value">${rgbText(color.hex)}</span></div></section>` : ''}`;
 }
 let importText = '', importError = '', importInputMode = 'text', importLightText = '', importDarkText = '', importName = '';
 function importPanel() {
@@ -454,8 +468,8 @@ function liveColor(hex) {
   for(const badges of document.querySelectorAll('[data-color-checks]'))badges.innerHTML=renderColorCheckBadges(report.entries[Number(badges.dataset.colorChecks)],report);
   if (state.role === 'surface' && i === 0) document.querySelector('#preview-canvas').style.setProperty('--canvas-bg', hex);
   if (state.scene === 'financial') { applyFinancialPalette(document.querySelector('#preview-canvas'), current(), state.theme); cancelAnimationFrame(compactColorFrame);compactColorFrame=requestAnimationFrame(repaintFinancialCharts); }
-  if (state.scene === 'terminal') applyTerminalPalette(document.querySelector('#preview-canvas'),current(),state.theme,state.globalChartStyle);
-  if (state.scene === 'workspace') applyWorkspacePalette(document.querySelector('#preview-canvas'),current(),state.theme,state.globalChartStyle);
+  if (state.scene === 'terminal') lazyScenes.terminal.module?.applyTerminalPalette(document.querySelector('#preview-canvas'),current(),state.theme,state.globalChartStyle);
+  if (state.scene === 'workspace') lazyScenes.workspace.module?.applyWorkspacePalette(document.querySelector('#preview-canvas'),current(),state.theme,state.globalChartStyle);
   if (['custom','aime'].includes(state.scene)) { cancelAnimationFrame(compactColorFrame); compactColorFrame = requestAnimationFrame(repaintCompactBoard); }
 }
 function bindInputs() {
@@ -579,6 +593,44 @@ function download(value, name) {
   const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }), url = URL.createObjectURL(blob), a = document.createElement('a');
   a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+function commitColorMove(from, to) {
+  if (from === to || to < 0 || to >= state.draft.themes[state.theme].categorical.length) return false;
+  remember(); moveCategoricalColor(state.draft, from, to);
+  state.selected = indexAfterMove(state.selected, from, to);
+  persist(); render();
+  return true;
+}
+// Reorders with flex `order` during the drag, so the pressed element stays in the DOM until drop.
+function startColorDrag(handle, event) {
+  const from = Number(handle.dataset.colorDrag), item = handle.closest('.color-item'), list = item.parentElement, items = [...list.children], scroller = document.querySelector('.side-scroll');
+  const others = items.filter(element => element !== item);
+  let to = from;
+  const place = () => { others.forEach((element, i) => { element.style.order = i < to ? i : i + 1; }); item.style.order = to; };
+  const move = moveEvent => {
+    const rect = scroller.getBoundingClientRect();
+    if (moveEvent.clientY < rect.top + 24) scroller.scrollTop -= 8; else if (moveEvent.clientY > rect.bottom - 24) scroller.scrollTop += 8;
+    to = others.filter(element => { const box = element.getBoundingClientRect(); return moveEvent.clientY > box.top + box.height / 2; }).length;
+    place();
+  };
+  const finish = endEvent => {
+    removeEventListener('pointermove', move); removeEventListener('pointerup', finish); removeEventListener('pointercancel', finish);
+    item.classList.remove('dragging');
+    if (endEvent.type === 'pointercancel' || !commitColorMove(from, to)) render();
+  };
+  event.preventDefault(); item.classList.add('dragging');
+  addEventListener('pointermove', move); addEventListener('pointerup', finish); addEventListener('pointercancel', finish);
+}
+app.addEventListener('pointerdown', event => {
+  const handle = event.target.closest?.('[data-color-drag]');
+  if (handle && !event.button && !isLiveReadOnly()) startColorDrag(handle, event);
+});
+app.addEventListener('keydown', event => {
+  const handle = event.target.closest?.('[data-color-drag]');
+  if (!handle || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+  event.preventDefault();
+  const from = Number(handle.dataset.colorDrag), to = from + (event.key === 'ArrowUp' ? -1 : 1);
+  if (commitColorMove(from, to)) document.querySelector(`[data-color-drag="${to}"]`)?.focus();
+});
 function copyLiveSession() {
   if (!live.ready) return;
   clearActiveOwner(localStorage, live.base);
@@ -621,6 +673,7 @@ app.addEventListener('click', async e => {
     return;
   }
   if (action === 'scene') { state.scene = value; state.editorOpen = false; }
+  if (action === 'scene-retry') lazyScenes[value].failed = false;
   if (action === 'rename-palette') {
     const palette=state.saved.find(p=>p.id===state.draft.id);if(!palette)return;
     openModal(`${modalHead('重命名色板')}<label for="rename-name">色板名称</label><input id="rename-name" class="modal-input" maxlength="80" value="${esc(palette.name)}" autocomplete="off"><div class="inline-error" id="rename-error" role="alert"></div><div class="modal-actions"><button class="button" data-modal-action="close">取消</button><button class="button primary" data-modal-action="rename-palette" data-value="${esc(palette.id)}">保存名称</button></div>`);
@@ -628,6 +681,18 @@ app.addEventListener('click', async e => {
   }
   if (action === 'delete-palette') { deletePalette(value); return; }
   if (action === 'editor-close') state.editorOpen = false;
+  if (action === 'editor-model') state.editorModel = value === 'hsb' ? 'hsb' : 'oklch';
+  if (action === 'color-add' && state.mode === 'draft' && state.role === 'categorical') {
+    remember(); addCategoricalColor(state.draft);
+    state.selected = state.draft.themes[state.theme].categorical.length - 1; state.editorOpen = true;
+  }
+  if (action === 'color-remove' && state.mode === 'draft' && state.role === 'categorical') {
+    const index = Number(value);
+    remember(); removeCategoricalColor(state.draft, index);
+    if (state.selected === index) state.editorOpen = false;
+    else if (state.selected > index) state.selected--;
+    toast('已删除颜色，可撤销此操作');
+  }
   if (action === 'palette-tab') {
     if (value === 'current') return;
     const palette = [...presets,...state.saved].find(p=>p.id===value);
@@ -682,7 +747,7 @@ app.addEventListener('click', async e => {
   if (action === 'apply-import' && pendingImport) {
     if (pendingImport.session) {
       const s = pendingImport.session; state.customTemplate=[...comparisonTemplates.map(t=>t.id),'free'].includes(s.customTemplate)?s.customTemplate:'all';state.comparisonBoards=validateComparisonBoards(s.comparisonBoards); state.globalChartStyle=normalizeGlobalChartStyle(s.globalChartStyle); state.checkSettings=normalizeCheckSettings(s.checkSettings); state.financialBoard = validateFinancialBoard(s.financialBoard); state.financialDensity = s.financialDensity === 'standard' ? 'standard' : 'compact'; if (s.customBoard) state.customBoard = validateCompactBoard(s.customBoard); if(s.aimeBoard)state.aimeBoard=validateAimeBoard(s.aimeBoard); stashDraft(); state.baseline = clone(s.baseline); state.draft = clone(s.draft); state.draft.id = crypto.randomUUID(); state.baseline.id = state.draft.id;
-      state.scene = scenes.some(v => v.id === s.scene) ? s.scene : 'financial'; state.theme = ['light', 'dark'].includes(s.theme) ? s.theme : 'light'; history = []; future = [];
+      state.scene = mobileEntry ? 'aime' : scenes.some(v => v.id === s.scene) ? s.scene : 'financial'; state.theme = ['light', 'dark'].includes(s.theme) ? s.theme : 'light'; history = []; future = [];
     } else { const p = clone(pendingImport.candidates[importedIndex]); p.name = importName.trim() || p.name; p.id = crypto.randomUUID(); const sourceName=p.name;let suffix=2;while([...presets,...state.saved].some(v=>v.name===p.name))p.name=sourceName+' '+suffix++;state.saved.push(clone(p)); state.saved = state.saved.slice(-30); applyPalette(p); }
     state.mode = 'draft'; state.panel = 'palette'; state.editorOpen = false; state.role = 'categorical'; state.selected = 0; pendingImport = null; toast('已导入，可以开始调整颜色');
   }

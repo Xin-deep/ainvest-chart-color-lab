@@ -56,3 +56,14 @@ test('shared financial charts retain monetary amounts, percentage units and orig
   assert.ok(config('financial-yield').series[0].data.every(v=>v>0&&v<.0056));
   assert.ok(Math.abs(config('financial-business').items.reduce((sum,item)=>sum+item.value,0)-109.42e9)<=.011e9);
 });
+
+test('low density gives fixed-height financial charts more room; radars and auto heights stay', async () => {
+  const { financialChartModules, financialModulesFor } = await import('../dist/data/financial-shared.js');
+  assert.equal(financialModulesFor('compact'), financialChartModules);
+  const low = financialModulesFor('standard'), byChart = id => low.find(m => m.chartId === id).height;
+  for (const id of ['balance-trend', 'balance-breakdown', 'dividend-payout', 'dividend-yield']) assert.equal(byChart(id), 300);
+  assert.equal(byChart('technical-radar'), 160);
+  assert.equal(byChart('investment-rating'), 170);
+  assert.equal(byChart('revenue-breakdown-business'), 'auto');
+  assert.equal(financialChartModules.find(m => m.chartId === 'balance-trend').height, 240);
+});

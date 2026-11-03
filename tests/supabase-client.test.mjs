@@ -77,3 +77,17 @@ test('cloud config works on localhost too, public key rotation preserves owner i
   assert.equal(validateSupabaseConfig({ ...config, publishableKey: anon }).publishableKey, anon);
   assert.throws(() => validateSupabaseConfig({ ...config, url: 'http://project.supabase.co' }), /HTTPS/);
 });
+
+test('subscribing after loading a link does not join the session a second time', async () => {
+  const f = fixture(), revisions = [];
+  const id = 'f'.repeat(32), joins = () => f.calls.filter(call => call.name === 'aime_join_live').length;
+  await f.client.get(id);
+  assert.equal(joins(), 1);
+  const close = f.client.subscribe(id, row => revisions.push(row.revision), () => {});
+  await settle();
+  assert.equal(joins(), 1);
+  f.revision(2); f.status('SUBSCRIBED'); await settle();
+  assert.equal(joins(), 2, 'the catch-up after subscribing closes the gap');
+  assert.deepEqual(revisions, [2]);
+  close();
+});

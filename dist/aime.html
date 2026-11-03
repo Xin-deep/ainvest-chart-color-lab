@@ -7,12 +7,60 @@
     <meta name="description" content="Ainvest 可视化配色实验台：导入、调整和保存色板，在真实产品场景中验证颜色。" />
     <title>Aime · 手机预览</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%23202022'/%3E%3Cpath d='M11 28V12h7a6 6 0 0 1 0 12h-3' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./styles.css" />
-    <script src="./vendor/vis-lab.bundle.js"></script>
+    <link rel="modulepreload" href="./app.js" />
+    <link rel="modulepreload" href="./lib/live-sync.js" />
+    <link rel="modulepreload" href="./lib/supabase-sync.js" />
+    <link rel="modulepreload" href="./lib/mobile-preview.js" />
+    <link rel="modulepreload" href="./lib/colorjs-picker.js" />
+    <link rel="modulepreload" href="./lib/colors.js" />
+    <link rel="modulepreload" href="./scenes/comparison.js" />
+    <link rel="modulepreload" href="./scenes/custom.js" />
+    <link rel="modulepreload" href="./lib/chart-style.js" />
+    <link rel="modulepreload" href="./lib/palette-checks.js" />
+    <link rel="modulepreload" href="./lib/oklch.js" />
+    <link rel="modulepreload" href="./scenes/color-checks.js" />
+    <link rel="modulepreload" href="./lib/palettes.js" />
+    <link rel="modulepreload" href="./data/presets.js" />
+    <link rel="modulepreload" href="./scenes/financial.js" />
+    <link rel="modulepreload" href="./data/financial-shared.js" />
+    <link rel="modulepreload" href="./data/financial-reference.js" />
+    <link rel="modulepreload" href="./scenes/aime.js" />
+    <link rel="modulepreload" href="./data/aime-reference.js" />
+    <link rel="modulepreload" href="./scenes/financial-extras.js" />
+    <script defer src="./vendor/vis-lab.bundle.js"></script>
     <script type="module" src="./app.js"></script>
+    <script>
+      // Runs before anything else paints: match the theme and fetch the sync SDK alongside the app.
+      (function () {
+        var params = new URLSearchParams(location.search), shared = params.has('live') || params.has('edit'), theme = params.get('theme');
+        try {
+          theme = (shared && localStorage.getItem('ainvest-live-viewer-theme:v1')) || theme || (!shared && JSON.parse(localStorage.getItem('ainvest-palette-lab:v1') || '{}').theme);
+        } catch (error) { /* Storage can be blocked; the light skeleton still works. */ }
+        if (theme === 'dark') document.documentElement.dataset.bootTheme = 'dark';
+        if (shared) {
+          var sdk = document.createElement('link');
+          sdk.rel = 'modulepreload'; sdk.href = './vendor/supabase.bundle.js';
+          document.head.appendChild(sdk);
+        }
+      })();
+    </script>
+    <style>
+      html { background: #fff; }
+      html[data-boot-theme="dark"] { background: #121212; }
+      .aime-boot { --bone: #eeeef1; height: 100dvh; padding: 62px 16px 0; overflow: hidden; }
+      html[data-boot-theme="dark"] .aime-boot { --bone: #26262a; }
+      .aime-boot i { display: block; height: 14px; margin-bottom: 12px; border-radius: 7px; background: var(--bone); animation: aime-boot-pulse 1.4s ease-in-out infinite; }
+      .aime-boot .bubble { width: 42%; height: 40px; margin: 0 0 32px auto; border-radius: 18px; }
+      .aime-boot .short { width: 62%; }
+      .aime-boot .chart { height: 220px; margin: 28px 0; border-radius: 12px; }
+      @keyframes aime-boot-pulse { 50% { opacity: .5; } }
+      @media (prefers-reduced-motion: reduce) { .aime-boot i { animation: none; } }
+    </style>
   </head>
-  <body data-mobile-preview="true">
-    <div id="app"></div>
+  <body data-mobile-preview="true" style="margin:0">
+    <div id="app"><div class="aime-boot" role="status" aria-label="正在加载"><i class="bubble"></i><i></i><i></i><i class="short"></i><i class="chart"></i><i></i><i class="short"></i></div></div>
+    <!-- Below the skeleton on purpose: a stylesheet in the head would hold back the first paint. -->
+    <link rel="stylesheet" href="./styles.css" />
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <dialog id="modal" aria-labelledby="modal-title"></dialog>
   </body>
