@@ -7,13 +7,13 @@ export const surfaces = {
 };
 export const surfaceNames = ['页面背景', '卡片背景', '主要文字', '次要文字', '分隔线', '网格线'];
 const colorList = (list, names, prefix) => list.map((hex, i) => ({ id: `${prefix}-${i + 1}`, name: names?.[i] || `系列 ${String(i + 1).padStart(2, '0')}`, hex: normalizeColor(hex) }));
-export function createPalette({ id, name, light, dark, names, up = '#009B67', down = '#FF381A', darkUp = up, darkDown = down, background, source = '自定义色板', availableThemes = ['light', 'dark'] }) {
+export function createPalette({ id, name, light, dark, names, up = '#009B67', down = '#FF381A', darkUp = up, darkDown = down, background, card = background, source = '自定义色板', availableThemes = ['light', 'dark'] }) {
   return {
     schemaVersion: 1, id, name, source, availableThemes,
     themes: Object.fromEntries(['light', 'dark'].map(theme => [theme, {
       categorical: colorList(theme === 'light' ? (light || dark) : (dark || light), names, 'category'),
       semantic: colorList(theme === 'light' ? [up, down] : [darkUp, darkDown], ['上涨', '下跌'], 'state'),
-      surface: colorList(background ? [background[theme], background[theme], ...surfaces[theme].slice(2)] : surfaces[theme], surfaceNames, 'surface')
+      surface: colorList(background ? [background[theme], card[theme], ...surfaces[theme].slice(2)] : surfaces[theme], surfaceNames, 'surface')
     }]))
   };
 }

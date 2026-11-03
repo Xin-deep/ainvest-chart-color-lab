@@ -3,11 +3,11 @@
 - **线上地址：** https://xin-deep.github.io/ainvest-chart-color-lab/
 - **手机预览：** https://xin-deep.github.io/ainvest-chart-color-lab/aime.html
 
-把候选色板放进接近真实产品的页面里，对比基线和修改结果，并检查色差、色觉缺陷和对比度。当前版本 0.17.0，变更记录见 [CHANGELOG](CHANGELOG.md)。
+把候选色板放进接近真实产品的页面里，对比基线和修改结果，并检查色差、色觉缺陷和对比度。变更记录见 [CHANGELOG](CHANGELOG.md)。
 
 ## 功能
 
-- **五个场景：** 财报分析、Aime 对话、自由看板、web 市场、Terminal 工作区，均支持浅色和深色。
+- **五个场景：** Aime 对话、财报分析、自由看板、web 市场、Terminal 工作区，均支持浅色和深色。
 - **调色：** 分类色、涨跌色、界面色独立编辑，支持 OKLCH、HSB、HEX、RGB、HSL，以及 A/B 对比、撤销和 JSON 导入导出。
 - **分类色顺序：** 可拖动排序、添加和删除，同时作用于浅色和深色；涨跌色和界面色位置固定。
 - **预置色板：** Ainvest 原始、Claude、TradingView、Simply Wall St、Robinhood，在 [presets.js](dist/data/presets.js) 维护。
@@ -70,6 +70,8 @@ npm run build:supabase  # Supabase SDK
 
 - `semantic` 顺序：上涨、下跌。
 - `surface` 顺序：页面背景、卡片背景、主要文字、次要文字、分隔线、网格线。
+
+Aime 对话有自己的界面色：未修改的界面色显示为对话页的默认值，Claude 和 Robinhood 还有专属背景（见 `presets.js` 的 `aimeBackgrounds`）。在 Aime 场景，控制台显示这些实际值，导出的 JSON 仍是 `surface` 里的原值。
 
 ## 自托管 Node 同步服务（可选）
 

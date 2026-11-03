@@ -3,13 +3,39 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
 import { parseImport } from '../dist/lib/palettes.js';
+import { normalizeColor } from '../dist/lib/colors.js';
 import { presets } from '../dist/data/presets.js';
 import { aimeChartConfig } from '../dist/data/aime-reference.js';
 const context={console,URL,setTimeout,clearTimeout};
 runInNewContext(await readFile(new URL('../dist/vendor/vis-lab.bundle.js',import.meta.url),'utf8'),context);
 globalThis.PaletteVisEngine=context.PaletteVisEngine;
-const {defaultAimeBoard,validateAimeBoard,renderAimeScene,aimeBoardPanel,aimeHeaderKind}=await import('../dist/scenes/aime.js');
+const {defaultAimeBoard,validateAimeBoard,renderAimeScene,aimeBoardPanel,aimeHeaderKind,applyAimePalette,aimeShownPalette}=await import('../dist/scenes/aime.js');
 const {defaultCompactBoard,newCompactModule}=await import('../dist/scenes/custom.js');
+test('Aime background follows the preset override until the page background is edited',()=>{
+ const background=(palette,theme)=>{const props={};applyAimePalette({querySelector:()=>({style:{setProperty:(k,v)=>{props[k]=v;},removeProperty:k=>{delete props[k];}}})},palette,theme);return props['--aime-bg'];};
+ const byId=Object.fromEntries(presets.map(p=>[p.id,structuredClone(p)]));
+ assert.equal(background(byId.claude,'light'),'#FFFFFF');assert.equal(background(byId.claude,'dark'),'#191919');
+ assert.equal(background(byId['robinhood-brand'],'light'),'#FFFFFF');assert.equal(background(byId['robinhood-brand'],'dark'),'#000000');
+ assert.equal(background(byId.tradingview,'light'),'#F5F5F5');assert.equal(background(byId['simply-wall-st'],'dark'),'#1A1A1A');
+ assert.equal(background(byId.ainvest,'dark'),'#141414');assert.equal(background(byId.ainvest,'light'),'#FFFFFF');
+ byId.claude.themes.light.surface[0].hex='#ABCDEF';assert.equal(background(byId.claude,'light'),'#ABCDEF');
+});
+test('the console reads the colors Aime shows without changing the palette',()=>{
+ const ainvest=structuredClone(presets.find(p=>p.id==='ainvest')),stored=JSON.stringify(ainvest);
+ const shown=hexes=>aimeShownPalette(ainvest,'dark').themes.dark.surface.map(c=>c.hex).slice(0,hexes);
+ assert.deepEqual(shown(5),['#141414','#141414','#CCCCCC','#737373','#2E2E2E']);
+ assert.equal(JSON.stringify(ainvest),stored);
+ ainvest.themes.dark.surface[2].hex='#ABCDEF';assert.equal(shown(5)[2],'#ABCDEF');
+ assert.deepEqual(aimeShownPalette(ainvest,'dark').themes.light,ainvest.themes.light);
+});
+test('Aime console values match the conversation styles',async()=>{
+ const css=await readFile(new URL('../dist/styles.css',import.meta.url),'utf8');
+ for(const [theme,selector] of [['light','.aime-stage{'],['dark','.aime-stage[data-aime-theme="dark"]{']]){
+  const rule=css.slice(css.indexOf(selector)),value=name=>normalizeColor(rule.match(new RegExp(`--aime-${name}:(#[0-9a-fA-F]+)`))[1]);
+  const palette=structuredClone(presets[0]);
+  assert.deepEqual(aimeShownPalette(palette,theme).themes[theme].surface.map(c=>c.hex).slice(0,5),['bg','card','text','muted','line'].map(value));
+ }
+});
 test('Aime uses five shared chart types with independent mobile scene state',()=>{
  const board=defaultAimeBoard(),other=defaultCompactBoard();
  assert.equal(board.platform,'mobile');assert.equal(board.modules.length,5);assert.equal(other.modules.length,25);
