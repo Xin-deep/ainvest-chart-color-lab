@@ -1,3 +1,12 @@
+## 0.21.0 · 2026-11-04
+
+- web 的 Crypto ETF Fund Flow 环状图、Terminal 的 ETF Holding Distribution 环状图和 Holding sector 分段条都减少到 7 项；环状图和分段条按比例撑满，图例同步减少。
+- 「颜色角色」列表不再显示 OKLCH、ΔE 和对比度标记，单个颜色的结果在编辑面板和「色值检验」里查看。
+- Terminal 的 P&L 卡片增加涨跌开关：切到「跌」时走势变为下跌，曲线、面积和 Day’s P&L 改用下跌色。
+- web 和 Terminal 的折柱组合图（Global yield curves 和对应的 ETF Holding Distribution）的折线、圆点和图例改用折线色，柱子仍用分类色。
+- 所有预置色板在每个场景的界面色都和原始色板一样，不再有专属的页面和卡片背景，包括 Aime。手动改过的颜色和已保存的方案不受影响。
+- 手机端的色板切换和主题切换从顶部移到输入框上方，替换原来的 Fast、Price Forecast 和 Circle Analysis，顶部那一条去掉；电脑上的 Aime 预览不变。
+
 ## 0.20.0 · 2026-11-04
 
 - 固定链接在电脑上打开时显示右侧工具栏，可以切换场景、色板和浅深色，也可以收起；选择只存在查看者自己的浏览器里，页面仍然只读。手机打开不变。

@@ -75,7 +75,7 @@ npm run build:supabase  # Supabase SDK
 - `semantic` 顺序：上涨、下跌。
 - `surface` 顺序：页面背景、卡片背景、主要文字、次要文字、分隔线、网格线。
 
-Aime 对话有自己的界面色：未修改的界面色显示为对话页的默认值，Claude 和 Robinhood 还有专属背景（见 `presets.js` 的 `aimeBackgrounds`）。在 Aime 场景，控制台显示这些实际值，导出的 JSON 仍是 `surface` 里的原值。
+Aime 对话有自己的界面色：未修改的界面色显示为对话页的默认值。所有预置色板的界面色都和原始色板一样。在 Aime 场景，控制台显示这些实际值，导出的 JSON 仍是 `surface` 里的原值。
 
 ## 自托管 Node 同步服务（可选）
 

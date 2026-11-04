@@ -103,6 +103,7 @@
 .aime-mobile .aime-content-scroll{overflow-x:hidden;-webkit-overflow-scrolling:touch}
 .aime-mobile .aime-quick-actions{overflow-x:auto;scrollbar-width:none}
 .aime-mobile .aime-quick-actions>span{flex-shrink:0}
+.aime-theme-switch{display:inline-flex;align-items:center;gap:4px;flex-shrink:0;min-height:36px;padding:0 10px;border:1px solid var(--aime-line);border-radius:18px;background:var(--aime-bg);color:var(--aime-text);font-size:13px}.aime-theme-switch svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .aime-mobile .aime-chart-card>header{flex-wrap:wrap}
 .aime-mobile .aime-chart-card>header>button:first-child{overflow-wrap:anywhere;min-height:44px}
 .aime-mobile .aime-insert{display:block;min-width:44px;min-height:44px}
@@ -128,18 +129,20 @@
 .viewer-toolbar .palette-tabs{max-height:none}.viewer-toolbar .side-scroll{padding:0 18px 16px}
 .live-viewer .aime-chart-card>header>button{pointer-events:none}
 .live-viewer .aime-preview-controls>button{font-size:12px}
-.aime-viewer-palettes{position:relative;display:flex;flex:1;min-width:0;gap:6px;overflow-x:auto;scrollbar-width:none}
+.aime-viewer-palettes{position:relative;display:flex;flex-shrink:0;gap:6px}
+.aime-row-pinned{position:sticky;left:0;z-index:1;display:flex;align-items:center;gap:6px;flex-shrink:0;background:var(--aime-bg);padding-right:2px}
+.aime-mobile .aime-quick-actions{align-items:center}.aime-quick-actions .live-dot{padding:0;border:0}
+.live-viewer.aime-mobile .aime-page{padding-top:env(safe-area-inset-top,0px)}
 .aime-viewer-palettes button{display:flex;align-items:center;gap:5px;flex:0 0 auto;min-height:36px;padding:0 10px;border:1px solid #e5e5e5;border-radius:18px;color:#666;font-size:12px;white-space:nowrap}
 .aime-viewer-palettes button.active{background:#f1f3ff;border-color:#b9c4ff;color:#404d89}
 .aime-viewer-palettes i{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .live-viewer .aime-preview-controls{gap:2px}
 .live-viewer .aime-preview-controls>button{display:grid;place-items:center;min-width:36px;padding:8px 6px}
-.aime-viewer-palettes{margin-left:6px}
-.aime-preview-controls>.live-dot{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:#a1a1aa}
-.aime-preview-controls>.live-dot.is-connected{background:#16a34a;animation:live-breathe 2s ease-in-out infinite}
-.aime-preview-controls>.live-dot.is-disconnected{background:#dc2626}
+.live-dot{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:#a1a1aa}
+.live-dot.is-connected{background:#16a34a;animation:live-breathe 2s ease-in-out infinite}
+.live-dot.is-disconnected{background:#dc2626}
 @keyframes live-breathe{0%,100%{opacity:1;box-shadow:0 0 0 0 #16a34a66}50%{opacity:.55;box-shadow:0 0 0 4px #16a34a00}}
-@media(prefers-reduced-motion:reduce){.aime-preview-controls>.live-dot.is-connected{animation:none}}
+@media(prefers-reduced-motion:reduce){.live-dot.is-connected{animation:none}}
 .aime-mobile:has(.aime-stage[data-aime-theme="dark"]) .aime-viewer-palettes button{border-color:#2e2e2e;color:#a0a0a0}
 .aime-mobile:has(.aime-stage[data-aime-theme="dark"]) .aime-viewer-palettes button.active{background:#292a31;border-color:#5268de;color:#ccd4ff}
 .live-unavailable #preview-canvas{visibility:hidden}

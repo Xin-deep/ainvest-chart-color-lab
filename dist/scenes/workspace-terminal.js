@@ -10,6 +10,8 @@ const wsPath=points=>'M'+points.map(p=>p.join(' ')).join('L');
 const wsAsset=(name,x,y,w,h=w)=>`<image data-workspace-asset="${name}" href="${workspaceReference.light.assets[name]}" x="${x}" y="${y}" width="${w}" height="${h}"/>`;
 const wsDates=(xs,y,values)=>xs.map((x,i)=>wsText(x,y,values[i],11,{anchor:'middle',fill:'var(--term-muted)'})).join('');
 const wsGrid=(x,y,w,h,values)=>values.map((v,i)=>wsLine(x,y+i*h/(values.length-1),x+w,y+i*h/(values.length-1))+wsText(x+w+6,y+i*h/(values.length-1)+4,v,11,{fill:'var(--term-muted)'})).join('');
+// The line of a bar and line combination takes the line palette, like the shared charts.
+const wsComboLine=(label,body)=>termMark('line',0,'#FF7040',label,body);
 const wsLegend=(x,y,count=3,spacing=70)=>Array.from({length:count},(_,i)=>wsCat(i,`Factory${i+1}`,`<circle cx="${x+i*spacing}" cy="${y-4}" r="4.5" fill="currentColor"/>`)+wsText(x+9+i*spacing,y,`Factory${i+1}`,11)).join('');
 function wsTools(x,y){return `<path d="M${x+6.5} ${y}l2 4 4.5.6-3.3 3.2.8 4.5-4-2.1-4 2.1.8-4.5-3.3-3.2 4.5-.6Z" fill="none" stroke="var(--term-text)" stroke-width="1"/>`+termIcon('clock',x+26,y,12)+`<path d="M${x+60} ${y-1}l2 5 4 2-4 2-2 6-2-6-4-2 4-2Z" fill="var(--term-text)"/>`+wsText(x+81,y+10,'···',15,{bold:true});}
 function wsHeading(x,y,w,title,plus=true){
@@ -26,7 +28,7 @@ function wsBars(id){
  }).join('');
 }
 function wsTraces(id){
- return workspaceReference.light.lines[id].map((points,i)=>wsCat(id==='yield'?2:i,`${id} ${i+1}`,`<path d="${wsPath(points)}" fill="none" stroke="currentColor" stroke-width="1.2" data-terminal-width="1.2" data-terminal-line data-workspace-trace="${id}:${i}"/>`)).join('');
+ return workspaceReference.light.lines[id].map((points,i)=>(id==='yield'?wsComboLine:wsCat.bind(null,i))(`${id} ${i+1}`,`<path d="${wsPath(points)}" fill="none" stroke="currentColor" stroke-width="1.2" data-terminal-width="1.2" data-terminal-line data-workspace-trace="${id}:${i}"/>`)).join('');
 }
 function wsHeader(){
  let out=wsRect(0,0,1781,1376,'var(--ws-frame)')+wsLine(63,37,1781,37,'var(--term-border)')+wsLine(63,0,63,1376,'var(--term-border)');
@@ -70,8 +72,10 @@ function wsCalendar(){
 }
 function wsDonut(){
  let b='';['All','BTC','ETH','XRP','SOL'].forEach((v,i)=>b+=termButton(990+i*76.4,119,72,22,v,{active:!i,control:v,group:'workspace-etf'}));
- b+=wsLegend(995,166,4,68)+Array.from({length:4},(_,i)=>wsCat(i+4,`Factory${i+5}`,`<circle cx="${995+i*68}" cy="178" r="4.5" fill="currentColor"/>`)+wsText(1004+i*68,182,i?'legend':'Factory5',11)).join('');
- let a=-Math.PI/2;[25,17.3,15.3,8.8,12,8.6,7.5,5.5].forEach((v,i)=>{const end=a+v*Math.PI/50;b+=wsCat(i,`Factory${i+1}`,`<path d="${termArc(1178,290,74,45,a,end)}" fill="currentColor" stroke="var(--term-bg)" stroke-width=".5" data-terminal-area/>`);a=end;});
+ b+=wsLegend(995,166,4,68)+Array.from({length:3},(_,i)=>wsCat(i+4,`Factory${i+5}`,`<circle cx="${995+i*68}" cy="178" r="4.5" fill="currentColor"/>`)+wsText(1004+i*68,182,i?'legend':'Factory5',11)).join('');
+ // The slices are shares of the ring, so they still close after dropping to seven items.
+ const amounts=[25,17.3,15.3,8.8,12,8.6,7.5],total=amounts.reduce((sum,v)=>sum+v);
+ let a=-Math.PI/2;amounts.forEach((v,i)=>{const end=a+v/total*Math.PI*2;b+=wsCat(i,`Factory${i+1}`,`<path d="${termArc(1178,290,74,45,a,end)}" fill="currentColor" stroke="var(--term-bg)" stroke-width=".5" data-terminal-area/>`);a=end;});
  b+=wsText(1178,285,'Total',12,{fill:'var(--term-muted)',anchor:'middle'})+wsText(1178,305,'155.25M',16,{bold:true,anchor:'middle'});
  return wsCard('holding-donut',983,78,393,308,'ETF Holding Distribution',b,{shade:true});
 }
@@ -85,8 +89,8 @@ function wsNews(){
 }
 function wsYield(){
  let b='';['All','BTC','ETH','XRP','SOL'].forEach((v,i)=>b+=termButton(79+i*59,744,55,22,v,{active:!i,control:v,group:'workspace-yield-filter'}));
- b+=wsLegend(84,785,3,68)+wsGrid(79,801,410,161,['6.0%','5.5%','5.0%','4.5%','4.0%','3.5%','3.0%','2.5%'])+wsBars('yield')+wsTraces('yield');
- const pts=workspaceReference.light.lines.yield[0];for(const x of [109,166,223,279,336,392,449]){const p=pts.reduce((a,b)=>Math.abs(a[0]-x)<Math.abs(b[0]-x)?a:b);b+=wsCat(2,'Factory3',`<circle cx="${p[0]}" cy="${p[1]}" r="3.8" fill="currentColor"/>`);}
+ b+=wsLegend(84,785,2,68)+wsComboLine('Factory3',`<circle cx="220" cy="781" r="4.5" fill="currentColor"/>`)+wsText(229,785,'Factory3',11)+wsGrid(79,801,410,161,['6.0%','5.5%','5.0%','4.5%','4.0%','3.5%','3.0%','2.5%'])+wsBars('yield')+wsTraces('yield');
+ const pts=workspaceReference.light.lines.yield[0];for(const x of [109,166,223,279,336,392,449]){const p=pts.reduce((a,b)=>Math.abs(a[0]-x)<Math.abs(b[0]-x)?a:b);b+=wsComboLine('Factory3',`<circle cx="${p[0]}" cy="${p[1]}" r="3.8" fill="currentColor"/>`);}
  return wsCard('yield',71,702,451,287,'ETF Holding Distribution',b+wsDates([107,164,221,278,335,392,449],978,['1M','3M','6M','1Y','2Y','3Y','5Y']));
 }
 function wsTesla(y,x=535){return wsAsset('TSLA',x,y-13,16)+wsText(x+18,y,'TSLA',11.5)+wsText(x+49,y,'Testa',11.5,{fill:'var(--term-muted)'})+wsText(x+200,y,'$424.00',11.5)+wsSemantic(false,'TSLA quote',wsText(x+249,y,'-4.39 (-2.52%)',11,{fill:'currentColor'}))+wsText(x+327,y,'After-Hours 20:00 ET',10,{fill:'var(--term-muted)'});}
@@ -96,8 +100,10 @@ function wsRates(){
  return wsCard('rates',527,702,450,287,'Quick Quote',b);
 }
 function wsSector(){
- let b='',x=990;[122,80,44,35,27,19,19,19,12].forEach((w,i)=>{const width=w;b+=wsCat(i,'Holding sector',wsRect(x,742,width,55,'currentColor',0,'stroke="var(--term-bg)" stroke-width=".5" data-terminal-area'));x+=width;});
- const names=['Technology','Financial Services','Technology','Financial Services','Technology','Financial Services','Financial Services','Technology'];
+ // Seven segments stretched to the 377px the strip already fills.
+ const widths=[122,80,44,35,27,19,19],sum=widths.reduce((total,w)=>total+w);
+ let b='',x=990;widths.forEach((w,i)=>{const width=w*377/sum;b+=wsCat(i,'Holding sector',wsRect(x,742,width,55,'currentColor',0,'stroke="var(--term-bg)" stroke-width=".5" data-terminal-area'));x+=width;});
+ const names=['Technology','Financial Services','Technology','Financial Services','Technology','Financial Services','Financial Services'];
  names.forEach((v,i)=>{const col=i%3,row=Math.floor(i/3),px=994+col*128,py=819+row*36;b+=wsCat(i,v,`<circle cx="${px}" cy="${py-5}" r="3" fill="currentColor"/>`)+wsText(px+7,py,v,10,{fill:'var(--term-muted)'})+wsText(px-4,py+17,i%2?'16.24%':'28.68%',12);});
  return wsCard('sector',983,702,393,242,'ETF Holding Distribution',b);
 }
@@ -109,19 +115,27 @@ function wsPortfolio(){
  wsPortfolios.forEach((name,i)=>{const y=1108+i*26;if(i%2)b+=wsRect(72,y-17,904,25,'var(--term-row)');b+=wsText(82,y,name,11.5)+wsSemantic(false,'Portfolio score',wsText(405,y,'86',11.5,{fill:'currentColor'}))+wsText(420,y,'/100',11.5);for(const [x,v] of [[508,'3.89'],[589,'72.88'],[671,'72.88'],[761,'72.88'],[849,'72.88'],[941,'8.95']])b+=wsText(x,y,v,11.5);});
  return wsCard('portfolios',71,994,906,365,'Popular Portfolios',b);
 }
-function wsPnl(){
- let b=wsText(990,1000,'Total Account Value',10.5,{fill:'var(--term-muted)'})+wsText(990,1017,'$51,996.13',12)+wsText(1146,1000,"Day’s P&L",10.5,{fill:'var(--term-muted)'})+wsSemantic(false,'Daily P&L',wsText(1146,1017,'+$467.89 (+0.13%)',12,{fill:'currentColor'}))+wsLine(990,1027,1766,1027);
+// The falling view mirrors the rising curve inside the same band, so it keeps its shape and stays on the chart.
+function pnlPoints(points,trend){
+ if(trend!=='down')return points;
+ const ys=points.map(p=>p[1]),top=Math.min(...ys),bottom=Math.max(...ys);
+ return points.map(([x,y])=>[x,top+bottom-y]);
+}
+function wsPnl(trend){
+ const down=trend==='down';
+ let b=wsText(990,1000,'Total Account Value',10.5,{fill:'var(--term-muted)'})+wsText(990,1017,'$51,996.13',12)+wsText(1146,1000,"Day’s P&L",10.5,{fill:'var(--term-muted)'})+wsSemantic(down,'Daily P&L',wsText(1146,1017,down?'-$467.89 (-0.13%)':'+$467.89 (+0.13%)',12,{fill:'currentColor'}))+wsLine(990,1027,1766,1027);
+ [['up','涨',1688],['down','跌',1724]].forEach(([id,label,x])=>b+=termButton(x,992,34,22,label,{active:trend===id,control:id,group:'workspace-pnl-trend',action:'pnl-trend'}));
  for(const [i,label] of ['Unsettled Funds ⓘ','Cash Balance','Available Funds','Available Funds','Risk Level ⓘ','Market Value','Max Buying Power','Open P&L'].entries()){
   const col=i<5?i:i-5,x=990+col*156,y=i<5?1045:1086;b+=wsText(x,y,label,10.5,{fill:'var(--term-muted)'});b+=i===4?wsSemantic(false,'Secure',wsText(x,y+17,'Secure',12,{fill:'currentColor'})):wsText(x,y+17,'$2,887.56',12);
  }
- const points=workspaceReference.light.lines.pnl;
- b+=wsSemantic(false,'P&L chart',`<defs><linearGradient id="workspace-pnl-gradient" x1="0" y1="0" x2="0" y2="1"><stop stop-color="currentColor" stop-opacity=".22"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs><path d="${wsPath(points)}L1710 1283L990 1283Z" fill="url(#workspace-pnl-gradient)" data-terminal-area/><path d="${wsPath(points)}" fill="none" stroke="currentColor" stroke-width="1.1" data-terminal-line data-terminal-width="1.1" data-workspace-green="pnl"/>`);
+ const points=pnlPoints(workspaceReference.light.lines.pnl,trend);
+ b+=wsSemantic(down,'P&L chart',`<defs><linearGradient id="workspace-pnl-gradient" x1="0" y1="0" x2="0" y2="1"><stop stop-color="currentColor" stop-opacity=".22"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs><path d="${wsPath(points)}L1710 1283L990 1283Z" fill="url(#workspace-pnl-gradient)" data-terminal-area/><path d="${wsPath(points)}" fill="none" stroke="currentColor" stroke-width="1.1" data-terminal-line data-terminal-width="1.1" data-workspace-green="pnl" data-workspace-trend="${trend}"/>`);
  ['6,126.00','6,126.00','6,126.00','6,126.00','6,126.00','6,126.00','6,126.00','6,126.00'].forEach((v,i)=>b+=wsText(1721,1136+i*22,v,11,{fill:'var(--term-muted)'}));
  b+=wsDates(Array.from({length:10},(_,i)=>1010+i*75),1307,Array(10).fill('09:20'));
  return wsCard('pnl',983,949,791,378,'P&L',b);
 }
-export function renderWorkspaceTerminal(){
- return `<div class="terminal-scene workspace-terminal" role="group" aria-label="Terminal 工作区"><svg class="workspace-shell" viewBox="0 0 1781 1376" xmlns="http://www.w3.org/2000/svg" aria-label="Terminal 工具导航">${wsHeader()}</svg><main class="workspace-terminal-scroll" tabindex="0" aria-label="Terminal 工作区内容"><svg viewBox="63 37 1718 1339" class="workspace-terminal-content" xmlns="http://www.w3.org/2000/svg" aria-label="行情、持仓与组合工作区"><defs><pattern id="terminal-texture" width="8" height="8" patternUnits="userSpaceOnUse"/></defs>${wsTabs()+wsStock()+wsCalendar()+wsDonut()+wsCap()+wsNews()+wsYield()+wsRates()+wsSector()+wsBonds()+wsPortfolio()+wsPnl()+wsRect(71,1364,906,50,'var(--term-bg)',5)+wsHeading(71,1364,906,'ETF Holding Distribution')}</svg></main><svg class="workspace-account" viewBox="0 1295 63 81" aria-label="Terminal 账户">${wsRect(0,1295,63,81,'var(--ws-frame)')+wsAsset('gift',20,1299,22,21)+`<circle cx="31" cy="1348" r="14" fill="#3371FF"/>`+wsText(31,1353,'J',14,{fill:'#fff',anchor:'middle'})}</svg></div>`;
+export function renderWorkspaceTerminal({pnlTrend='up'}={}){
+ return `<div class="terminal-scene workspace-terminal" role="group" aria-label="Terminal 工作区"><svg class="workspace-shell" viewBox="0 0 1781 1376" xmlns="http://www.w3.org/2000/svg" aria-label="Terminal 工具导航">${wsHeader()}</svg><main class="workspace-terminal-scroll" tabindex="0" aria-label="Terminal 工作区内容"><svg viewBox="63 37 1718 1339" class="workspace-terminal-content" xmlns="http://www.w3.org/2000/svg" aria-label="行情、持仓与组合工作区"><defs><pattern id="terminal-texture" width="8" height="8" patternUnits="userSpaceOnUse"/></defs>${wsTabs()+wsStock()+wsCalendar()+wsDonut()+wsCap()+wsNews()+wsYield()+wsRates()+wsSector()+wsBonds()+wsPortfolio()+wsPnl(pnlTrend)+wsRect(71,1364,906,50,'var(--term-bg)',5)+wsHeading(71,1364,906,'ETF Holding Distribution')}</svg></main><svg class="workspace-account" viewBox="0 1295 63 81" aria-label="Terminal 账户">${wsRect(0,1295,63,81,'var(--ws-frame)')+wsAsset('gift',20,1299,22,21)+`<circle cx="31" cy="1348" r="14" fill="#3371FF"/>`+wsText(31,1353,'J',14,{fill:'#fff',anchor:'middle'})}</svg></div>`;
 }
 export function applyWorkspacePalette(element,palette,theme,globalStyle={}){
  applyTerminalPalette(element,palette,theme,globalStyle);
@@ -132,5 +146,5 @@ export function applyWorkspacePalette(element,palette,theme,globalStyle={}){
  for(const [k,v] of Object.entries(vars))page.style.setProperty(k,v);
  const reference=workspaceReference[theme];for(const img of page.querySelectorAll('[data-workspace-asset]'))img.setAttribute('href',reference.assets[img.dataset.workspaceAsset]);
  for(const trace of page.querySelectorAll('[data-workspace-trace]')){const [id,i]=trace.dataset.workspaceTrace.split(':');trace.setAttribute('d',wsPath(reference.lines[id][i]));}
- for(const trace of page.querySelectorAll('[data-workspace-green]'))trace.setAttribute('d',wsPath(reference.lines[trace.dataset.workspaceGreen]));
+ for(const trace of page.querySelectorAll('[data-workspace-green]'))trace.setAttribute('d',wsPath(pnlPoints(reference.lines[trace.dataset.workspaceGreen],trace.dataset.workspaceTrend)));
 }

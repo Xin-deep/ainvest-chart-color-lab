@@ -68,5 +68,26 @@ test('dark theme uses reference surfaces and identity assets while series follow
  for(const id of ['major-bonds-trend','crypto-market-cap','crypto-etf-flow','global-yield-curves','key-interest-rates'])assert.ok(html.includes('data-terminal-chart="'+id+'"'),id);
  // Line points and their legend dots must address the same palette slots.
  assert.match(html,/data-color-index="2"[^>]+data-terminal-base="#9EA9C7"/);
- assert.match(html,/data-color-index="2"[^>]+data-terminal-base="#E57E17"/);
+ assert.equal(html.match(/data-color-role="line" data-color-index="0"[^>]+data-terminal-base="#E57E17"/g).length,7);
+});
+
+test('the crypto ETF donut shows seven slices and seven legend items',()=>{
+ const html=renderTerminalScene(),card=html.slice(html.indexOf('Crypto ETF Fund Flow'));
+ const slices=card.match(/<path d="[^"]*"[^>]*stroke-width="\.6" data-terminal-area\/>/g);
+ assert.equal(slices.length,7);
+ assert.doesNotMatch(card.slice(0,card.indexOf('155.25M')),/Factory8/);
+});
+
+test('every preset uses the original interface colors outside Aime until they are edited',()=>{
+ for(const preset of presets)for(const theme of ['light','dark'])for(const name of ['--term-page','--term-bg','--term-panel','--term-text','--term-border'])assert.equal(terminalPaletteStyle(preset,theme)[name],terminalPaletteStyle(presets[0],theme)[name],preset.id+name);
+ const claude=structuredClone(presets.find(p=>p.id==='claude'));
+ claude.themes.light.surface[0].hex='#EEDDCC';
+ assert.equal(terminalPaletteStyle(claude,'light')['--term-page'],'#EEDDCC');
+});
+
+test('only the yield combination uses the line palette, in its legend, line and points',()=>{
+ const html=renderTerminalScene(),marks=[...html.matchAll(/data-color-role="line"[^>]*aria-label="([^"]*)"/g)].map(m=>m[1]);
+ assert.equal(marks.filter(label=>label.startsWith('Factory3')).length,6);
+ assert.equal(marks.filter(label=>label.startsWith('yield')).length,1);
+ assert.equal(marks.length,7);
 });
