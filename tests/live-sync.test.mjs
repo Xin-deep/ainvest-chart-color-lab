@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createSyncServer } from '../scripts/sync-server.mjs';
 import { presets } from '../dist/data/presets.js';
-import { createLiveClient, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, saveViewerPalette, isQuietLiveStatus, discoverSyncBase } from '../dist/lib/live-sync.js';
+import { createLiveClient, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, readViewerScene, saveViewerScene, saveViewerPalette, isQuietLiveStatus, discoverSyncBase } from '../dist/lib/live-sync.js';
 const token = 'a'.repeat(64);
 const snapshot = () => ({ baseline: structuredClone(presets[0]), draft: structuredClone(presets[0]), aimeBoard: { catalogVersion: 3, platform: 'mobile', columns: 1, density: 'compact', modules: [{ id: 'chart-one', type: 'line-multi', count: 12, series: 3, fixture: 'aime-growth' }] }, theme: 'light', mode: 'draft', globalChartStyle: { lineWidth: 'inherit', texture: 'inherit' } });
 async function fixture(t) {
@@ -149,17 +149,42 @@ test('viewer palette choice is kept per link, can be cleared and tolerates corru
   assert.doesNotThrow(() => saveViewerPalette(blocked, 'one', 'claude'));
 });
 
+test('viewer scene choice is kept per link, ignores unknown scenes and tolerates corrupt or blocked storage', () => {
+  const values = new Map(), storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) }, known = ['aime', 'financial'];
+  assert.equal(readViewerScene(storage, 'one', known), null);
+  saveViewerScene(storage, 'one', 'financial');
+  assert.equal(readViewerScene(storage, 'one', known), 'financial');
+  assert.equal(readViewerScene(storage, 'two', known), null);
+  saveViewerScene(storage, 'one', 'retired');
+  assert.equal(readViewerScene(storage, 'one', known), null);
+  values.set('ainvest-live-viewer-scene:v1', '{broken');
+  assert.equal(readViewerScene(storage, 'one', known), null);
+  const blocked = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
+  assert.equal(readViewerScene(blocked, 'one', known), null);
+  saveViewerScene(blocked, 'one', 'aime');
+});
+
 test('the sync service keeps palette identity and saved palettes for viewers', async t => {
   const { base } = await fixture(t);
   const source = snapshot();
   source.draft = { ...source.draft, id: 'claude' };
   source.saved = [{ ...structuredClone(presets[0]), id: 'plan-a', name: '方案 A' }];
   source.presetEdits = { ainvest: structuredClone(presets[0]) };
+  source.financialBoard = { modules: [] };
+  source.customBoard = { modules: [] };
+  source.financialDensity = 'standard';
+  source.customTemplate = 'free';
+  source.comparisonBoards = {};
   const created = await api(base, '', 'POST', { snapshot: source, editToken: token });
   const { data } = await api(base, '/' + created.data.id);
   assert.equal(data.snapshot.draft.id, 'claude');
   assert.deepEqual(data.snapshot.saved.map(p => [p.id, p.name]), [['plan-a', '方案 A']]);
   assert.deepEqual(Object.keys(data.snapshot.presetEdits), ['ainvest']);
+  assert.deepEqual(data.snapshot.financialBoard, { modules: [] });
+  assert.deepEqual(data.snapshot.customBoard, { modules: [] });
+  assert.equal(data.snapshot.financialDensity, 'standard');
+  assert.equal(data.snapshot.customTemplate, 'free');
+  assert.deepEqual(data.snapshot.comparisonBoards, {});
 });
 
 test('only routine sync states stay silent; connection and write problems stay visible', () => {

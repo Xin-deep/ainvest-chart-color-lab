@@ -1,4 +1,4 @@
-import { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, saveViewerPalette, isQuietLiveStatus, discoverSyncBase, createLiveClient } from './lib/live-sync.js';
+import { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, saveViewerPalette, readViewerScene, saveViewerScene, isQuietLiveStatus, discoverSyncBase, createLiveClient } from './lib/live-sync.js';
 import { encodeMobilePreview, decodeMobilePreview } from './lib/mobile-preview.js';
 import { bindColorJsPicker } from './lib/colorjs-picker.js';
 import { comparisonTemplates, createComparisonBoard, validateComparisonBoards, comparisonTemplatePanel } from './scenes/comparison.js';
@@ -19,7 +19,7 @@ import { financialChartModules, financialModulesFor } from './data/financial-sha
 
 import { defaultFinancialBoard, validateFinancialBoard, renderFinancialExtras } from './scenes/financial-extras.js';
 
-const VERSION = '0.19.0';
+const VERSION = '0.20.0';
 const STORAGE_KEY = 'ainvest-palette-lab:v1';
 const scenes = [
   { id: 'aime', name: 'Aime 对话', en: 'Aime conversation', icon: 'chat' },
@@ -85,7 +85,10 @@ refreshUneditedPreset();
 writeBackDraft(state, presets);
 // Touch-only and phone-sized, so a narrow window on a computer can still edit.
 const isPhone = matchMedia('(hover: none) and (pointer: coarse)').matches && Math.min(screen.width, screen.height) <= 650;
-const mobileEntry = document.body.dataset.mobilePreview === 'true' || isPhone;
+// aime.html stays the phone page, except that a shared link opened on a computer gets the full read-only view.
+const aimeEntry = document.body.dataset.mobilePreview === 'true';
+const mobileEntry = isPhone || (aimeEntry && !new URLSearchParams(location.search).has('live'));
+if (aimeEntry && !mobileEntry) document.title = 'Palette Lab · 查看配色';
 // The phone entry only ever shows the Aime conversation, read-only; other scenes and editing stay on the website.
 const requestedScene = mobileEntry ? 'aime' : new URLSearchParams(location.search).get('scene');
 if (scenes.some(s => s.id === requestedScene)) state.scene = requestedScene;
@@ -106,17 +109,30 @@ const requestedTheme = new URLSearchParams(location.search).get('theme');
 if (['light', 'dark'].includes(requestedTheme)) state.theme = requestedTheme;
 if (mobileEntry || (state.scene === 'aime' && innerWidth <= 650)) { state.collapsed = true; state.previewFullscreen = false; }
 const isMobileAime = () => state.scene === 'aime' && (mobileEntry || innerWidth <= 650);
+const isDesktopViewer = () => live.role === 'viewer' && live.ready && !mobileEntry && !isMobileAime();
+// Narrow windows only have room for the phone layout, so they show Aime whatever was picked.
+const viewerSceneNow = () => live.viewerScene && innerWidth > 650 ? live.viewerScene : 'aime';
 const liveParams = new URLSearchParams(location.search);
 const requestedLiveId = liveParams.get('live') || liveParams.get('edit');
-const live = { role: requestedLiveId || mobileEntry ? 'viewer' : null, id: requestedLiveId, loading: !!requestedLiveId, ready: mobileEntry && !requestedLiveId, client: null, base: null, token: null, revision: 0, status: requestedLiveId ? '正在连接共享方案…' : '', error: '', pending: null, writing: false, lastJSON: '', timer: null, retry: null, stop: null, generation: 0, conflict: false, viewerTheme: null, viewerPalette: null, sharedPalettes: [], sharedPresetEdits: {} };
+const live = { role: requestedLiveId || mobileEntry ? 'viewer' : null, id: requestedLiveId, loading: !!requestedLiveId, ready: mobileEntry && !requestedLiveId, client: null, base: null, token: null, revision: 0, status: requestedLiveId ? '正在连接共享方案…' : '', error: '', pending: null, writing: false, lastJSON: '', timer: null, retry: null, stop: null, generation: 0, conflict: false, viewerTheme: null, viewerPalette: null, viewerScene: null, sharedPalettes: [], sharedPresetEdits: {} };
 const isLiveReadOnly = () => live.role === 'viewer' || live.loading;
 if (requestedLiveId) { state.scene = 'aime'; state.collapsed = true; state.previewFullscreen = false; }
-function liveSnapshot() { return { baseline: state.baseline, draft: state.draft, saved: state.saved, presetEdits: state.presetEdits, aimeBoard: state.aimeBoard, theme: state.theme, mode: state.mode, globalChartStyle: state.globalChartStyle }; }
+function liveSnapshot() { return { baseline: state.baseline, draft: state.draft, saved: state.saved, presetEdits: state.presetEdits, aimeBoard: state.aimeBoard, financialBoard: state.financialBoard, financialDensity: state.financialDensity, customBoard: state.customBoard, customTemplate: state.customTemplate, comparisonBoards: state.comparisonBoards, theme: state.theme, mode: state.mode, globalChartStyle: state.globalChartStyle }; }
+// Links created before layouts were shared leave them out, and that must not reset the local boards.
+function snapshotLayouts(snapshot) {
+  const layouts = {};
+  if (snapshot.financialBoard) layouts.financialBoard = validateFinancialBoard(snapshot.financialBoard);
+  if (['compact', 'standard'].includes(snapshot.financialDensity)) layouts.financialDensity = snapshot.financialDensity;
+  if (snapshot.customBoard) layouts.customBoard = validateCompactBoard(snapshot.customBoard);
+  if ([...comparisonTemplates.map(t => t.id), 'free'].includes(snapshot.customTemplate)) layouts.customTemplate = snapshot.customTemplate;
+  if (snapshot.comparisonBoards) layouts.comparisonBoards = validateComparisonBoards(snapshot.comparisonBoards);
+  return layouts;
+}
 function applyLiveSnapshot(snapshot) {
   const baseline = restorePalette(snapshot.baseline, presets), draft = restorePalette(snapshot.draft, presets), aimeBoard = validateAimeBoard(snapshot.aimeBoard);
   live.sharedPalettes = restoreSavedPalettes(snapshot.saved);
   live.sharedPresetEdits = restorePresetEdits(snapshot.presetEdits, presets.map(p => p.id));
-  state = { ...state, baseline, draft, aimeBoard, scene: 'aime', theme: snapshot.theme === 'dark' ? 'dark' : 'light', mode: snapshot.mode === 'baseline' ? 'baseline' : 'draft', globalChartStyle: normalizeGlobalChartStyle(snapshot.globalChartStyle), editorOpen: false };
+  state = { ...state, ...snapshotLayouts(snapshot), baseline, draft, aimeBoard, scene: viewerSceneNow(), theme: snapshot.theme === 'dark' ? 'dark' : 'light', mode: snapshot.mode === 'baseline' ? 'baseline' : 'draft', globalChartStyle: normalizeGlobalChartStyle(snapshot.globalChartStyle), editorOpen: false };
   refreshUneditedPreset();
 }
 // The owner's theme is only the default on first open; afterwards each viewer keeps their own.
@@ -163,7 +179,7 @@ async function flushLiveSnapshot() {
 }
 function detachLive() {
   live.stop?.(); clearTimeout(live.timer); clearTimeout(live.retry);
-  live.generation++; Object.assign(live, { role: null, id: null, ready: false, loading: false, pending: null, writing: false, stop: null, token: null, retry: null, conflict: false, error: '', viewerPalette: null, sharedPalettes: [], sharedPresetEdits: {} });
+  live.generation++; Object.assign(live, { role: null, id: null, ready: false, loading: false, pending: null, writing: false, stop: null, token: null, retry: null, conflict: false, error: '', viewerPalette: null, viewerScene: null, sharedPalettes: [], sharedPresetEdits: {} });
 }
 async function connectLive({ throwOnError = false, keepLocal = false } = {}) {
   if (!live.id) return;
@@ -179,12 +195,14 @@ async function connectLive({ throwOnError = false, keepLocal = false } = {}) {
     const publishLocal = keepLocal && !!token;
     if (!publishLocal) applyLiveSnapshot(record.snapshot);
     live.role = token ? 'owner' : 'viewer'; live.token = token; live.revision = record.revision; live.ready = true; live.loading = false; live.error = ''; live.conflict = false; live.pending = null; live.writing = false;
-    live.lastJSON = publishLocal ? '' : JSON.stringify(liveSnapshot());
+    // A link from before layouts were shared gets them from its owner on the next open.
+    const publishLayouts = !!token && !record.snapshot.financialBoard;
+    live.lastJSON = publishLocal || publishLayouts ? '' : JSON.stringify(liveSnapshot());
     if (token) saveActiveOwner(localStorage, live.base, live.id);
-    else { keepViewerTheme(); live.viewerPalette = readViewerPalette(localStorage, live.id); }
-    state.collapsed = live.role === 'viewer';
+    else { keepViewerTheme(); live.viewerPalette = readViewerPalette(localStorage, live.id); live.viewerScene = mobileEntry ? null : readViewerScene(localStorage, live.id, scenes.map(s => s.id)); state.scene = viewerSceneNow(); }
+    state.collapsed = live.role === 'viewer' && (mobileEntry || innerWidth <= 650);
     liveStatus(token ? '已同步 · 查看页面自动更新' : '已连接 · 只读同步'); render();
-    if (publishLocal) queueLiveSnapshot();
+    if (publishLocal || publishLayouts) queueLiveSnapshot();
     if (!token) live.stop = live.client.subscribe(live.id, next => {
       if (generation !== live.generation || next.revision <= live.revision) return;
       applyLiveSnapshot(next.snapshot); keepViewerTheme(); live.revision = next.revision; liveStatus('已连接 · 只读同步'); render();
@@ -227,7 +245,7 @@ function financialDensityPanel(){
 }
 function repaintFinancialCharts(){
   const canvas=document.querySelector('#preview-canvas');
-  mountCompactBoard(canvas,{modules:[...financialModulesFor(state.financialDensity),...state.financialBoard.modules],density:state.financialDensity,platform:'pc',globalChartStyle:state.globalChartStyle},current(),state.theme,(index,id,role='categorical')=>{if(state.financialBoard.modules.some(m=>m.id===id))state.financialBoard.selected=id;state.editorOpen=true;state.role=role;state.selected=index;state.panel='palette';state.collapsed=false;if(state.previewFullscreen)setPreviewFullscreen(false);else render();});
+  mountCompactBoard(canvas,{modules:[...financialModulesFor(state.financialDensity),...state.financialBoard.modules],density:state.financialDensity,platform:'pc',globalChartStyle:state.globalChartStyle},current(),state.theme,(index,id,role='categorical')=>{if(isLiveReadOnly())return;if(state.financialBoard.modules.some(m=>m.id===id))state.financialBoard.selected=id;state.editorOpen=true;state.role=role;state.selected=index;state.panel='palette';state.collapsed=false;if(state.previewFullscreen)setPreviewFullscreen(false);else render();});
 }
 function repaintCompactBoard() {
   const board=activeModuleBoard();
@@ -331,31 +349,31 @@ function render() {
   const customAnchor = visibleCard && { id: visibleCard.dataset.moduleId, offset: visibleCard.getBoundingClientRect().top - oldCustomFrame.getBoundingClientRect().top };
   destroyCompactCharts();
   const scene = scenes.find(s => s.id === state.scene), palette = current(), mobileAime = isMobileAime(), readOnly = isLiveReadOnly();
-  app.innerHTML = `<main class="app-shell two-pane ${mobileAime ? 'aime-mobile' : ''} ${readOnly ? 'live-viewer' : ''} ${readOnly && !live.ready ? 'live-unavailable' : ''} ${state.collapsed ? 'panel-collapsed' : ''} ${state.previewFullscreen ? 'preview-fullscreen' : ''}">
+  app.innerHTML = `<main class="app-shell two-pane ${mobileAime ? 'aime-mobile' : ''} ${readOnly ? 'live-viewer' : ''} ${isDesktopViewer() ? 'desktop-viewer' : ''} ${readOnly && !live.ready ? 'live-unavailable' : ''} ${state.collapsed ? 'panel-collapsed' : ''} ${state.previewFullscreen ? 'preview-fullscreen' : ''}">
     ${state.previewFullscreen ? `<button class="button fullscreen-exit" data-action="exit-fullscreen" aria-label="退出全屏预览">${icon('close')}退出全屏 <kbd>Esc</kbd></button>` : ''}
-    ${state.collapsed && !state.previewFullscreen && !mobileAime ? `<button class="icon-button workbench-launcher" data-action="collapse" aria-label="展开颜色工作台" title="展开颜色工作台" aria-expanded="false">${icon('panel')}</button>` : ''}
+    ${state.collapsed && !state.previewFullscreen && !mobileAime ? `<button class="icon-button workbench-launcher" data-action="${readOnly ? 'viewer-collapse' : 'collapse'}" aria-label="${readOnly ? '展开工具栏' : '展开颜色工作台'}" title="${readOnly ? '展开工具栏' : '展开颜色工作台'}" aria-expanded="false">${icon('panel')}</button>` : ''}
     ${mobileAime ? `<nav class="aime-preview-controls" aria-label="手机预览工具">${readOnly ? `${live.id ? liveDot() : ''}${live.ready ? viewerPaletteBar() : '<div class="aime-viewer-palettes"></div>'}` : '<span>Aime 预览</span>'}<button data-action="theme" data-value="${state.theme==='light'?'dark':'light'}" aria-label="切换到${state.theme==='light'?'深色':'浅色'}主题" ${readOnly&&!live.ready?'disabled':''}>${icon(state.theme==='light'?'moon':'sun')}</button>${readOnly ? '' : `<button data-action="share-mobile">分享</button><button data-action="collapse" aria-expanded="${!state.collapsed}" aria-controls="color-workbench">调色</button>`}</nav>` : ''}
     ${live.role ? `<div class="live-sync-bar" ${liveBarHidden()?'hidden':''}><span class="live-sync-status" role="status">${esc(live.status)}</span>${live.error||live.conflict?'<button data-action="live-reload">重新载入</button>':''}${live.role==='owner'?'<button data-action="live-copy">复制为新方案</button>':''}</div>` : ''}
     <div class="workspace">
       ${readOnly && !live.ready ? `<div class="live-viewer-notice"><p>${esc(live.error || '正在载入共享方案…')}</p>${live.error?'<button class="button" data-action="live-reload">重试</button>':''}</div>` : ''}
       ${mobileAime && !state.collapsed ? '<button class="aime-workbench-backdrop" data-action="collapse" aria-label="关闭颜色工作台"></button>' : ''}
       <section class="preview-workspace" aria-label="场景预览工作区">
-        <div class="preview-canvas ${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? 'has-scene' : ''}" id="preview-canvas" role="region" aria-label="${scene.name}${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? '，图表预览' : '，内容待添加'}" style="--canvas-bg:${palette.themes[state.theme].surface[0].hex}" data-scene="${state.scene}" data-theme="${state.theme}">${state.scene === 'financial' ? renderFinancialScene(renderFinancialExtras(state.financialBoard)) : state.scene === 'custom' ? renderCompactBoard(activeCustomBoard(),state.customTemplate==='free'?{}:{title:comparisonTemplates.find(t=>t.id===state.customTemplate).name,description:'全部 25 种图表 · 每种少量 / 大量数据对比'}) : state.scene === 'aime' ? renderAimeScene(state.aimeBoard,state.theme) : state.scene === 'terminal' ? (lazyScenes.terminal.module?.renderTerminalScene() ?? lazySceneHolder('terminal')) : state.scene === 'workspace' ? (lazyScenes.workspace.module?.renderWorkspaceTerminal() ?? lazySceneHolder('workspace')) : ''}</div>
+        <div class="preview-canvas ${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? 'has-scene' : ''}" id="preview-canvas" role="region" aria-label="${scene.name}${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? '，图表预览' : '，内容待添加'}" style="--canvas-bg:${palette.themes[state.theme].surface[0].hex}" data-scene="${state.scene}" data-theme="${state.theme}">${state.scene === 'financial' ? renderFinancialScene(renderFinancialExtras(state.financialBoard)) : state.scene === 'custom' ? renderCompactBoard(activeCustomBoard(),state.customTemplate==='free'?{}:{title:comparisonTemplates.find(t=>t.id===state.customTemplate).name,description:`全部 ${compactTypes.length} 种图表 · 每种少量 / 大量数据对比`}) : state.scene === 'aime' ? renderAimeScene(state.aimeBoard,state.theme) : state.scene === 'terminal' ? (lazyScenes.terminal.module?.renderTerminalScene() ?? lazySceneHolder('terminal')) : state.scene === 'workspace' ? (lazyScenes.workspace.module?.renderWorkspaceTerminal() ?? lazySceneHolder('workspace')) : ''}</div>
       </section>
-      <aside class="sidebar" id="color-workbench" aria-label="颜色操作面板" ${readOnly?'inert':''}>
+      ${isDesktopViewer() ? viewerToolbar() : `<aside class="sidebar" id="color-workbench" aria-label="颜色操作面板" ${readOnly?'inert':''}>
         <div class="sidebar-header">
           <div class="sidebar-title"><div class="workbench-heading"><span>颜色工作台</span><small>Palette Lab <span class="mono">v${VERSION}</span></small></div><div class="workbench-history"><button class="icon-button" data-action="undo" title="撤销（⌘/Ctrl Z）" aria-label="撤销" ${!history.length ? 'disabled' : ''}>${icon('undo')}</button><button class="icon-button" data-action="redo" title="重做（⌘/Ctrl Shift Z）" aria-label="重做" ${!future.length ? 'disabled' : ''}>${icon('redo')}</button><button class="icon-button" data-action="collapse" title="收起颜色工作台" aria-label="收起颜色工作台" aria-expanded="true">${icon('panel')}</button></div></div>
           ${mobileEntry ? '' : `<nav class="workbench-scenes" aria-label="产品使用场景">${scenes.map(s => `<button class="scene-tab ${s.id === state.scene ? 'active' : ''}" data-action="scene" data-value="${s.id}" aria-current="${s.id === state.scene ? 'page' : 'false'}">${s.name}</button>`).join('')}</nav>`}
-          <div class="workbench-controls"><div class="segment" aria-label="预览主题"><button data-action="theme" data-value="light" class="${state.theme === 'light' ? 'active' : ''}" aria-pressed="${state.theme === 'light'}">${icon('sun')}浅色</button><button data-action="theme" data-value="dark" class="${state.theme === 'dark' ? 'active' : ''}" aria-pressed="${state.theme === 'dark'}">${icon('moon')}深色</button></div><div class="segment compare-switch" aria-label="调整前后对比"><button data-action="mode" data-value="baseline" class="${state.mode === 'baseline' ? 'active' : ''}" aria-pressed="${state.mode === 'baseline'}">A 原始</button><button data-action="mode" data-value="draft" class="${state.mode === 'draft' ? 'active' : ''}" aria-pressed="${state.mode === 'draft'}">B 调整后</button></div></div>
+          <div class="workbench-controls">${themeSegment()}<div class="segment compare-switch" aria-label="调整前后对比"><button data-action="mode" data-value="baseline" class="${state.mode === 'baseline' ? 'active' : ''}" aria-pressed="${state.mode === 'baseline'}">A 原始</button><button data-action="mode" data-value="draft" class="${state.mode === 'draft' ? 'active' : ''}" aria-pressed="${state.mode === 'draft'}">B 调整后</button></div></div>
           <div class="workbench-actions"><button class="button primary" data-action="save" aria-label="另存为新方案">${icon('save')}另存为</button></div>
-          ${state.scene==='aime'?'<button class="button mobile-share-button" data-action="share-mobile">分享手机预览</button>':''}
+          <button class="button mobile-share-button" data-action="share-mobile">分享预览</button>
           ${paletteTabs()}
           <div class="sidebar-tabs" role="tablist" aria-label="颜色操作"><button role="tab" aria-selected="${state.panel === 'palette'}" class="${state.panel === 'palette' ? 'active' : ''}" data-action="panel" data-value="palette">${icon('sliders')}编辑色板</button><button role="tab" aria-selected="${state.panel === 'import'}" class="${state.panel === 'import' ? 'active' : ''}" data-action="panel" data-value="import">${icon('upload')}导入颜色</button><button role="tab" aria-selected="${state.panel === 'check'}" class="${state.panel === 'check' ? 'active' : ''}" data-action="panel" data-value="check">色值检验</button></div>
         </div>
         ${state.mode === 'baseline' && state.panel === 'palette' ? `<div class="baseline-notice">${icon('lock')}正在查看原始基线 · 切换 B 后可调色</div>` : ''}
         <div class="side-scroll">${state.panel === 'palette' ? moduleSettingsPanel() + palettePanel() : state.panel === 'check' ? renderColorChecks(shownPalette(),state.theme,state.role,state.checkSettings) : importPanel()}</div>
         <div class="sidebar-footer"><span id="save-status">${state.panel === 'import' ? (live.role==='owner'?'应用导入后将同步至共享方案':'本地解析 · 文件内容不会上传') : storageAvailable ? `已自动保存 · ${changedCount()} 处颜色修改` : '浏览器存储不可用，请导出保存'}</span></div>
-      </aside>
+      </aside>`}
     </div>
   </main>`;
   document.querySelector('.side-scroll').scrollTop = scroll;
@@ -391,9 +409,19 @@ function render() {
   bindInputs();
 }
 const paletteLabel = p => p.id === 'ainvest' ? '原始' : presets.find(v => v.id === p.id)?.name || p.name;
-function viewerPaletteBar() {
+function viewerChoices() {
   const options = viewerOptions(), ownerTab = ownerTabId(), selected = viewerPick()?.id || ownerTab;
   if (ownerTab === 'current') options.push({ ...sharedPalette(), id: 'current', name: paletteLabel(state.draft) });
+  return { options, selected };
+}
+const themeSegment = () => `<div class="segment" aria-label="预览主题"><button data-action="theme" data-value="light" class="${state.theme === 'light' ? 'active' : ''}" aria-pressed="${state.theme === 'light'}">${icon('sun')}浅色</button><button data-action="theme" data-value="dark" class="${state.theme === 'dark' ? 'active' : ''}" aria-pressed="${state.theme === 'dark'}">${icon('moon')}深色</button></div>`;
+// Computers get the choices a phone has plus the scenes; nothing here edits or saves the shared plan.
+function viewerToolbar() {
+  const { options, selected } = viewerChoices();
+  return `<aside class="sidebar viewer-toolbar" id="color-workbench" aria-label="查看工具"><div class="sidebar-header"><div class="sidebar-title"><div class="workbench-heading"><span>查看配色</span><small>只读，你的选择不会影响原方案</small></div><div class="workbench-history"><button class="icon-button" data-action="viewer-collapse" title="收起工具栏" aria-label="收起工具栏" aria-expanded="true">${icon('panel')}</button></div></div><nav class="workbench-scenes" aria-label="产品使用场景">${scenes.map(s => `<button class="scene-tab ${s.id === state.scene ? 'active' : ''}" data-action="viewer-scene" data-value="${s.id}" aria-current="${s.id === state.scene ? 'page' : 'false'}">${s.name}</button>`).join('')}</nav><div class="workbench-controls">${themeSegment()}</div></div><div class="side-scroll"><div class="palette-tab-heading"><span>色板方案</span></div><div class="palette-tabs" role="tablist" aria-label="色板方案">${options.map(p => `<div class="palette-tab-item"><button role="tab" data-action="viewer-palette" data-value="${esc(p.id)}" aria-selected="${p.id === selected}" tabindex="${p.id === selected ? 0 : -1}" class="palette-tab ${p.id === selected ? 'active' : ''}" title="${esc(p.name)}"><i style="background:${p.themes[state.theme].categorical[0].hex}"></i><span>${esc(p.id === 'current' ? p.name : paletteLabel(p))}</span></button></div>`).join('')}</div></div><div class="sidebar-footer"><span class="live-sync-status">${esc(live.status)}</span></div></aside>`;
+}
+function viewerPaletteBar() {
+  const { options, selected } = viewerChoices();
   return `<div class="aime-viewer-palettes" role="group" aria-label="切换色板">${options.map(p => `<button data-action="viewer-palette" data-value="${esc(p.id)}" aria-pressed="${p.id === selected}" class="${p.id === selected ? 'active' : ''}"><i style="background:${p.themes[state.theme].categorical[0].hex}"></i>${esc(p.id === 'current' ? p.name : paletteLabel(p))}</button>`).join('')}</div>`;
 }
 const editedMark = '<em class="palette-tab-edited">已修改</em>';
@@ -676,6 +704,12 @@ app.addEventListener('click', async e => {
     if (live.id) saveViewerPalette(localStorage, live.id, live.viewerPalette);
     render(); return;
   }
+  if (live.role === 'viewer' && live.ready && !mobileEntry) {
+    const viewerTarget = e.target.closest('[data-action]');
+    if (liveAction === 'viewer-scene' && scenes.some(s => s.id === viewerTarget.dataset.value)) { live.viewerScene = viewerTarget.dataset.value; saveViewerScene(localStorage, live.id, live.viewerScene); state.scene = viewerSceneNow(); render(); return; }
+    if (liveAction === 'viewer-collapse') { state.collapsed = !state.collapsed; render(); return; }
+    if (liveAction === 'scene-retry') { lazyScenes[viewerTarget.dataset.value].failed = false; render(); return; }
+  }
   if (isLiveReadOnly()) return;
   const card=e.target.closest('[data-module-id]'),cardAction=e.target.closest('[data-action]');
   if(card&&(!cardAction||cardAction.dataset.action==='module-select')){selectPreviewModule(card.dataset.moduleId);return;}
@@ -691,7 +725,7 @@ app.addEventListener('click', async e => {
   if (action === 'fullscreen' || action === 'exit-fullscreen') { await setPreviewFullscreen(action === 'fullscreen'); return; }
   if (action === 'share-mobile') {
     if (!/^https?:$/.test(location.protocol)) { toast('请通过已部署的网址分享，离线文件可导出实验 JSON'); return; }
-    openModal(`${modalHead('分享手机预览')}<p>固定链接只读，电脑改色后自动同步。查看者只能切换主题和色板，不能编辑。</p><button class="button primary" data-modal-action="live-share">${live.role==='owner'?'复制固定链接':'获取固定链接'}</button><p class="editor-footnote">${live.role==='owner'?'编辑权限只保存在创建方案的浏览器中。':'同一浏览器会复用上次创建的链接；首次使用才新建。'}</p><button class="button" data-modal-action="snapshot-share">分享静态快照</button><p class="editor-footnote">静态快照可在现有 GitHub Pages 使用；后续改色仍需重新分享。</p>${live.role==='owner'?'<button class="button" data-modal-action="live-copy">复制为新方案</button><p class="editor-footnote">生成独立副本，之后可创建新的固定链接，不影响当前链接。</p>':''}`);
+    openModal(`${modalHead('分享预览')}<p>固定链接只读，配色和各场景的模块布局都会自动同步。手机打开只看 Aime 对话，可以切换主题和色板；电脑打开还能切换场景。查看者都不能编辑。</p><button class="button primary" data-modal-action="live-share">${live.role==='owner'?'复制固定链接':'获取固定链接'}</button><p class="editor-footnote">${live.role==='owner'?'编辑权限只保存在创建方案的浏览器中。':'同一浏览器会复用上次创建的链接；首次使用才新建。'}</p><button class="button" data-modal-action="snapshot-share">分享静态快照</button><p class="editor-footnote">静态快照只包含 Aime 对话；后续改色仍需重新分享。</p>${live.role==='owner'?'<button class="button" data-modal-action="live-copy">复制为新方案</button><p class="editor-footnote">生成独立副本，之后可创建新的固定链接，不影响当前链接。</p>':''}`);
     return;
   }
   if (action === 'scene') { state.scene = value; state.editorOpen = false; }
@@ -788,7 +822,7 @@ modal.addEventListener('click', async e => {
     shareButton.disabled = true;
     try {
       await ensureLiveOwner();
-      openModal(`${modalHead('固定只读链接')}<p>复制给手机或其他人打开。当前浏览器调色后，查看页面会自动更新；查看者无法覆盖你的方案。</p><textarea class="code-area" id="mobile-share-url" readonly aria-label="手机预览链接">${esc(liveViewerURL())}</textarea><div class="modal-actions"><button class="button" data-modal-action="close">关闭</button><button class="button primary" data-modal-action="copy-mobile-link">复制链接</button></div>`);
+      openModal(`${modalHead('固定只读链接')}<p>发给其他人，手机和电脑都能打开。当前浏览器调色后，查看页面会自动更新；查看者无法覆盖你的方案。</p><textarea class="code-area" id="mobile-share-url" readonly aria-label="手机预览链接">${esc(liveViewerURL())}</textarea><div class="modal-actions"><button class="button" data-modal-action="close">关闭</button><button class="button primary" data-modal-action="copy-mobile-link">复制链接</button></div>`);
       const field = document.querySelector('#mobile-share-url'); field.focus(); field.select();
     } catch (error) { shareButton.disabled = false; toast(error.message); }
     return;
@@ -803,7 +837,7 @@ modal.addEventListener('click', async e => {
   if (isLiveReadOnly()) return;
   if (e.target.closest('[data-modal-action="copy-mobile-link"]')) {
     const field = document.querySelector('#mobile-share-url');
-    try { await navigator.clipboard.writeText(field.value); toast('已复制手机预览链接'); }
+    try { await navigator.clipboard.writeText(field.value); toast('已复制预览链接'); }
     catch { field.focus(); field.select(); toast('请复制已选中的链接'); }
     return;
   }
@@ -852,5 +886,6 @@ else if (sharedPreviewLoaded) toast('已载入分享的 Aime 方案');
 else if (loaded) toast('已恢复上次的色板与实验设置');
 
 matchMedia('(max-width:650px)').addEventListener('change', () => {
-  if (state.scene === 'aime') { if (innerWidth <= 650) state.collapsed = true; render(); }
+  if (live.role === 'viewer' && live.ready && !mobileEntry) state.scene = viewerSceneNow();
+  if (state.scene === 'aime' || live.role === 'viewer') { if (innerWidth <= 650) state.collapsed = true; render(); }
 });

@@ -123,8 +123,9 @@
 .live-sync-bar[hidden]{display:none}
 .live-sync-status{flex:1;min-width:0;overflow-wrap:anywhere}
 .live-sync-bar button{padding:6px;border-radius:4px;background:#fff;font-size:12px}
-.live-viewer .sidebar,.live-viewer .workbench-launcher,.live-viewer .compact-card-tools,.live-viewer .aime-insert,.live-viewer .aime-add-chart,.live-viewer .aime-composer-field>button{display:none!important}
-.live-viewer .aime-chart-card.is-selected{outline:none}
+.live-viewer:not(.desktop-viewer) .sidebar,.live-viewer:not(.desktop-viewer) .workbench-launcher,.live-viewer .compact-add-tile,.live-viewer .compact-hint:not(.comparison-description),.live-viewer .compact-card-tools,.live-viewer .aime-insert,.live-viewer .aime-add-chart,.live-viewer .aime-composer-field>button{display:none!important}
+.live-viewer .aime-chart-card.is-selected,.live-viewer .compact-card.is-selected{outline:none}
+.viewer-toolbar .palette-tabs{max-height:none}.viewer-toolbar .side-scroll{padding:0 18px 16px}
 .live-viewer .aime-chart-card>header>button{pointer-events:none}
 .live-viewer .aime-preview-controls>button{font-size:12px}
 .aime-viewer-palettes{position:relative;display:flex;flex:1;min-width:0;gap:6px;overflow-x:auto;scrollbar-width:none}
