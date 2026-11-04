@@ -34,7 +34,8 @@ npm run build:preview  # 改完 dist/ 必须执行，并提交 preview.html
 - **预加载列表：** `aime.html` 列出了首屏模块，增删首屏模块要同步更新，`tests/aime-entry.test.mjs` 会检查。
 - **色板 id：** `robinhood`、`finary`、`wealthsimple` 是旧 id，载入时会被重置，新色板不能使用。
 - **改色写回：** `persist()` 通过 `writeBackDraft` 把草稿写回原色板：我的方案写回 `state.saved`，预置色板写入 `state.presetEdits`，`presets` 本身不变。`state.baseline` 只用于「恢复原始」和改动标记，历史记录里的 id 和名称不要带回当前色板（见 `onOpenPalette`）。
-- **色板结构：** 只有分类色和折线色能排序和增删，且同时作用于浅色和深色。涨跌色固定 2 个，界面色固定 6 个，位置都有固定含义。折线色只用于同时有柱和线的折柱图，纯折线图仍用分类色（`seriesPaletteSlots`）。
+- **色板锁定：** `state.lockedPalettes` 随固定链接同步，查看页只显示锁的标记。新增修改色板的入口要检查 `isPaletteLocked()`。
+- **色板结构：** 只有分类色和折线色能排序和增删，且同时作用于浅色和深色。涨跌色固定 2 个，界面色固定 6 个，位置都有固定含义。中性色单独存在 `neutral`，控制台显示在涨跌色中间；不要放进 `semantic`，线上数据库的校验要求它正好 2 个。折线色只用于同时有柱和线的折柱图，纯折线图仍用分类色（`seriesPaletteSlots`）。
 - **Aime 界面色单独一套：** Aime 的默认界面色写在 `styles.css` 的 `.aime-stage`，`scenes/aime.js` 的 `aimeDefaults` 要保持一致（有测试检查），所有预置色板的界面色都和原始一样，没有专属背景。控制台在 Aime 场景通过 `shownPalette()` 显示实际值，不要把它写回色板。
 - **改完要看实际效果：** 单元测试只覆盖逻辑，布局和拖动要在浏览器里验证。
 

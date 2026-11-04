@@ -12,7 +12,7 @@ function normalizeSnapshot(input) {
   for (const module of input.aimeBoard.modules) {
     if (!module || typeof module.type !== 'string' || !/^[\w-]{1,80}$/.test(module.id) || !/^[\w-]{1,80}$/.test(module.type)) throw new Error('无效的图表模块');
   }
-  return { version: 1, baseline: restorePalette(input.baseline), draft: restorePalette(input.draft), saved: restoreSavedPalettes(input.saved), presetEdits: restorePresetEdits(input.presetEdits), aimeBoard: input.aimeBoard, financialBoard: input.financialBoard, financialDensity: input.financialDensity, customBoard: input.customBoard, customTemplate: input.customTemplate, comparisonBoards: input.comparisonBoards, theme: input.theme === 'dark' ? 'dark' : 'light', mode: input.mode === 'baseline' ? 'baseline' : 'draft', globalChartStyle: normalizeGlobalChartStyle(input.globalChartStyle) };
+  return { version: 1, baseline: restorePalette(input.baseline), draft: restorePalette(input.draft), saved: restoreSavedPalettes(input.saved), presetEdits: restorePresetEdits(input.presetEdits), lockedPalettes: Array.isArray(input.lockedPalettes) ? input.lockedPalettes.filter(id => typeof id === 'string').slice(0, 40) : [], aimeBoard: input.aimeBoard, financialBoard: input.financialBoard, financialDensity: input.financialDensity, customBoard: input.customBoard, customTemplate: input.customTemplate, comparisonBoards: input.comparisonBoards, theme: input.theme === 'dark' ? 'dark' : 'light', mode: input.mode === 'baseline' ? 'baseline' : 'draft', globalChartStyle: normalizeGlobalChartStyle(input.globalChartStyle) };
 }
 const hash = token => createHash('sha256').update(token).digest('hex');
 export function createSyncServer({ root = resolve('dist'), dataDir = resolve('.data/live-sessions'), allowedOrigins = [] } = {}) {

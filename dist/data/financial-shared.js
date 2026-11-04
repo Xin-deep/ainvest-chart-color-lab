@@ -1,7 +1,7 @@
 import { financialDividendYieldTrace, payoutIncomeBars, payoutCashBars } from './financial-reference.js';
 const financialChartModules=[
  {id:'financial-technical',type:'radar-basic',fixture:'financial-technical',chartId:'technical-radar',height:160},
- {id:'financial-rating',type:'radar-rating',fixture:'financial-rating',chartId:'investment-rating',height:170},
+ {id:'financial-rating',type:'radar-curve',fixture:'financial-rating',chartId:'investment-rating',height:210},
  {id:'financial-trend',type:'combo',fixture:'financial-trend',chartId:'balance-trend',height:240,colorSlots:[0,1]},
  {id:'financial-breakdown',type:'waterfall-data',fixture:'financial-breakdown',chartId:'balance-breakdown',height:240},
  {id:'financial-business',type:'donut',fixture:'financial-business',chartId:'revenue-breakdown-business',height:'auto',summary:{label:'Total',value:'109.42B'}},
@@ -17,7 +17,7 @@ function financialChartConfig(module){
  const b=1e9;
  switch(module.fixture){
  case 'financial-technical':return {name:'Technical Score',dimensions:['Fundamental','Technical','Momentum'],series:[{name:'Technical Score',data:[4,3,1.5]}],max:10,segments:4,shape:'curve',editable:false};
- case 'financial-rating':return {name:'Investment Rating',dimensions:['Value','Future','Past','Health','Dividend'],series:[{name:'Rating',data:[1.5,5,4,8,4.5]}],max:10,segments:5,variant:'rating',editable:false};
+ case 'financial-rating':return {name:'Investment Rating',dimensions:['Value','Future','Past','Health','Dividend'],series:[{name:'Rating',data:[1.5,5,4,8,4.5]}],max:10,segments:4,shape:'curve',editable:false};
  case 'financial-trend':return {categories:['Q4 2024','Q1 2025','Q2 2025','Q3 2025','Q4 2025','Q1 2026','Q2 2026','Q3 2026'],series:[{name:'Assets',type:'bar',data:[366.98,344.08,331.23,331.49,359.24,367.04,359.21,383.28].map(v=>v*b)},{name:'Liabilities',type:'bar',data:[308.03,284.63,279.41,279.17,300.19,305.36,278.82,275.75].map(v=>v*b)},{name:'Debt Ratio',type:'line',axis:'secondary',data:[.844,.806,.7983,.8014,.7948,.7675,.719,.7265]}],zoom:{start:0,end:1}};
  case 'financial-breakdown':return {name:'Balance Sheet',period:'',variant:'data',xAxisContent:'name',showRelations:true,items:[{id:'assets',name:'Assets',kind:'total',value:383.27*b,percent:.1562},{id:'liabilities',name:'Liabilities',kind:'delta',value:-275.75*b,operatorBefore:'-',percent:.0379},{id:'equity',name:'Equity',kind:'total',value:107.52*b,operatorBefore:'=',percent:.6333}]};
  case 'financial-business':return {name:'Revenue by Business',variant:'donut',items:[['iPhone',54.25],['Services',30.74],['Mac',10.35],['Other Products',7.88],['iPad',6.19]].map(([name,value])=>({name,value:value*b})),legend:'bottom',dataLabel:true,labelLayout:'outside'};

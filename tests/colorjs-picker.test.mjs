@@ -52,3 +52,12 @@ test('readiness requires all three initialized controls and a usable color',asyn
  await new Promise(resolve=>setImmediate(resolve));
  assert.equal(shell.dataset.pickerState,'fallback');assert.match(status.textContent,/HSB 和 HEX/);
 });
+
+test('the HSB sliders stay hidden while the OKLCH picker loads and return only as a fallback',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const css=await readFile(new URL('../dist/styles.css',import.meta.url),'utf8');
+ assert.match(css,/\[data-picker-state=loading\] \.hsb-fallback\{display:none\}/);
+ assert.doesNotMatch(css,/\[data-picker-state=fallback\] \.hsb-fallback\{display:none/);
+ assert.match(css,/\[data-picker-state=loading\]\{min-height:191px\}/);
+ assert.match(await readFile(new URL('../dist/app.js',import.meta.url),'utf8'),/loadColorJsPicker\(\)\.catch/);
+});

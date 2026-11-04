@@ -63,7 +63,15 @@ test('low density gives fixed-height financial charts more room; radars and auto
   const low = financialModulesFor('standard'), byChart = id => low.find(m => m.chartId === id).height;
   for (const id of ['balance-trend', 'balance-breakdown', 'dividend-payout', 'dividend-yield']) assert.equal(byChart(id), 300);
   assert.equal(byChart('technical-radar'), 160);
-  assert.equal(byChart('investment-rating'), 170);
+  assert.equal(byChart('investment-rating'), 210);
   assert.equal(byChart('revenue-breakdown-business'), 'auto');
   assert.equal(financialChartModules.find(m => m.chartId === 'balance-trend').height, 240);
+});
+
+test('the investment rating uses the curve radar instead of the colored rating field',()=>{
+ const module=financialChartModules.find(m=>m.id==='financial-rating'),cfg=financialChartConfig(module);
+ assert.equal(module.type,'radar-curve');
+ assert.equal(cfg.shape,'curve');assert.equal(cfg.variant,undefined);
+ assert.deepEqual(cfg.dimensions,['Value','Future','Past','Health','Dividend']);
+ assert.deepEqual(cfg.series[0].data,[1.5,5,4,8,4.5]);
 });
