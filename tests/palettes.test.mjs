@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeColor, hsvToHex, hexToHsv } from '../dist/lib/colors.js';
 import { parseImport, validatePalette, createPalette, restorePalette, restoreSavedPalettes, restorePresetEdits, countColorChanges, writeBackDraft, moveSeriesColor, removeSeriesColor, addSeriesColor, indexAfterMove } from '../dist/lib/palettes.js';
-import { presets } from '../dist/data/presets.js';
+import { presets, dropRetiredBackgrounds } from '../dist/data/presets.js';
 
 test('normalize supported color formats without silently clipping invalid colors', () => {
   assert.equal(normalizeColor('#abc'), '#AABBCC');
@@ -82,11 +82,7 @@ test('brand palettes use the supplied values and backgrounds', () => {
   assert.deepEqual(hex(byId['simply-wall-st'].themes.dark.categorical), ['#1D96DC', '#73E6D5', '#BA4986', '#E6B068', '#9F50E7']);
   assert.deepEqual(hex(byId['simply-wall-st'].themes.light.semantic), ['#12A15B', '#E74142']);
   assert.deepEqual(hex(byId['simply-wall-st'].themes.dark.semantic), ['#2EC87C', '#E74142']);
-  for (const [id, light, dark] of [['claude', ['#F5F5F5', '#FFFFFF'], ['#000000', '#191919']], ['tradingview', ['#F5F5F5', '#FFFFFF'], ['#000000', '#1A1A1A']], ['simply-wall-st', ['#F6F4EF', '#EFECE6'], ['#1A1A1A', '#212121']], ['robinhood-brand', ['#F5F5F5', '#FFFFFF'], ['#000000', '#1A1A1A']]]) {
-    assert.deepEqual(hex(byId[id].themes.light.surface).slice(0, 2), light);
-    assert.deepEqual(hex(byId[id].themes.dark.surface).slice(0, 2), dark);
-    assert.equal(validatePalette(byId[id]).themes.dark.surface[0].hex, dark[0]);
-  }
+  for (const preset of presets) for (const theme of ['light', 'dark']) assert.deepEqual(preset.themes[theme].surface.map(c => c.hex), presets[0].themes[theme].surface.map(c => c.hex), preset.id);
   assert.equal(presets[0].themes.light.surface[0].hex, '#F5F5F6');
 });
 test('shared palettes keep their identity so they match their tab again', () => {
@@ -202,4 +198,15 @@ test('line colors can be reordered and resized without touching the categorical 
   removeSeriesColor(palette, 0, 'line');
   assert.equal(palette.themes.light.line.length, 2);
   assert.deepEqual(palette.themes.light.categorical, categorical);
+});
+
+test('old preset backgrounds are dropped on load while hand-edited colors stay', () => {
+  const claude = structuredClone(presets.find(p => p.id === 'claude'));
+  claude.themes.dark.surface[0].hex = '#000000'; claude.themes.dark.surface[1].hex = '#191919'; claude.themes.light.surface[0].hex = '#ABCDEF';
+  dropRetiredBackgrounds(claude);
+  assert.deepEqual(claude.themes.dark.surface.slice(0, 2).map(c => c.hex), presets[0].themes.dark.surface.slice(0, 2).map(c => c.hex));
+  assert.equal(claude.themes.light.surface[0].hex, '#ABCDEF');
+  const scheme = { ...structuredClone(presets[0]), id: 'plan-a' };
+  scheme.themes.dark.surface[0].hex = '#000000';
+  assert.equal(dropRetiredBackgrounds(scheme).themes.dark.surface[0].hex, '#000000');
 });

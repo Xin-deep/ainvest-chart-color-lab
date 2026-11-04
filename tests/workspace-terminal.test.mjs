@@ -26,3 +26,34 @@ test('workspace theme surfaces and series update independently of the web scene'
  palette.themes.dark.categorical[0].hex='#AABBCC';applyWorkspacePalette(host,palette,'dark');assert.equal(mark.style.color,'#AABBCC');
  applyWorkspacePalette(host,palette,'light');assert.equal(vars.get('--ws-frame'),'#F4F5F7');assert.equal(vars.get('--term-bg'),'#FFFFFF');assert.equal(mark.style.color,'#265FFC');
 });
+
+test('the holding donut and sector strip each show seven items',()=>{
+ const html=renderWorkspaceTerminal();
+ assert.equal(html.match(/<path[^>]*stroke-width="\.5" data-terminal-area\/>/g)?.length,7);
+ assert.equal(html.match(/<rect[^>]*y="742"[^>]*data-terminal-area/g)?.length,7);
+ const widths=[...html.matchAll(/<rect x="[\d.]+" y="742" width="([\d.]+)"/g)].reduce((sum,m)=>sum+Number(m[1]),0);
+ assert.ok(Math.abs(widths-377)<.01);
+});
+
+test('the yield combination takes its legend, line and points from the line palette',()=>{
+ const html=renderWorkspaceTerminal(),marks=[...html.matchAll(/data-color-role="line"[^>]*aria-label="([^"]*)"/g)].map(m=>m[1]);
+ assert.equal(marks.filter(label=>label.startsWith('Factory3')).length,8);
+ assert.equal(marks.filter(label=>label.startsWith('yield')).length,1);
+ assert.equal(marks.length,9);
+});
+
+test('the P&L switch turns the curve, area and daily figure to falling',()=>{
+ const up=renderWorkspaceTerminal(),down=renderWorkspaceTerminal({pnlTrend:'down'});
+ const line=html=>html.match(/<path d="([^"]+)"[^>]*data-workspace-green="pnl"/)[1].slice(1).split('L').map(p=>p.split(' ').map(Number));
+ const riseUp=line(up),riseDown=line(down);
+ // SVG y grows downward, so a falling curve ends lower on the page than it starts.
+ assert.ok(riseUp.at(-1)[1]<riseUp[0][1]);assert.ok(riseDown.at(-1)[1]>riseDown[0][1]);
+ const ys=points=>points.map(p=>p[1]);
+ assert.ok(Math.abs(Math.min(...ys(riseUp))-Math.min(...ys(riseDown)))<1e-6);assert.ok(Math.abs(Math.max(...ys(riseUp))-Math.max(...ys(riseDown)))<1e-6);
+ assert.match(up,/\+\$467\.89 \(\+0\.13%\)/);assert.match(down,/-\$467\.89 \(-0\.13%\)/);assert.doesNotMatch(down,/\+\$467\.89/);
+ const mark=(html,label)=>html.match(new RegExp('data-color-index="(\\d)"[^>]*aria-label="'+label))[1];
+ assert.equal(mark(up,'P&amp;L chart'),'0');assert.equal(mark(down,'P&amp;L chart'),'1');
+ assert.equal(mark(up,'Daily P&amp;L'),'0');assert.equal(mark(down,'Daily P&amp;L'),'1');
+ assert.equal(mark(down,'Secure'),'0');
+ assert.match(down,/is-active[^>]*data-terminal-control="down"/);assert.match(up,/is-active[^>]*data-terminal-control="up"/);
+});

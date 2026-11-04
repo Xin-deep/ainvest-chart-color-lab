@@ -17,10 +17,10 @@ const termDates=(xs,y,labels)=>xs.map((x,i)=>termText(x,y,labels[i],11.5,{anchor
 const termSeriesColors=['#1F5FD6','#D9720B','#C14696','#0E9C84','#7647C8','#BB8D13','#8AA126','#168CB8'];
 const termSeriesSlots=[0,1,2,3,4,5,6,7];
 function termLegend(x,y,items,spacing=72,size=12){
- return items.map((item,i)=>{const name=typeof item==='string'?item:item.name,index=typeof item==='string'?i:item.index,base=typeof item==='string'?termSeriesColors[i]:item.base;return termCat(termSeriesSlots[index]??index,base,name,`<circle cx="${x+i*spacing}" cy="${y-4}" r="4.6" fill="currentColor"/>`)+termText(x+9+i*spacing,y,name,size);}).join('');
+ return items.map((item,i)=>{const name=typeof item==='string'?item:item.name,index=typeof item==='string'?i:item.index,base=typeof item==='string'?termSeriesColors[i]:item.base;return termMark(item.role||'categorical',termSeriesSlots[index]??index,base,name,`<circle cx="${x+i*spacing}" cy="${y-4}" r="4.6" fill="currentColor"/>`)+termText(x+9+i*spacing,y,name,size);}).join('');
 }
-function termButton(x,y,w,h,label,{active=false,black=false,control='',group=''}={}){
- return `<g class="terminal-button ${active?'is-active':''} ${black?'terminal-button-black':''}" ${control?`data-terminal-control="${termE(control)}" data-terminal-group="${termE(group)}" tabindex="0" role="button" aria-pressed="${active}" aria-label="${termE(label)}"`:''}>${termRect(x,y,w,h,'var(--term-soft)',3,'class="terminal-button-bg"')}${termText(x+w/2,y+h/2+4,label,12,{anchor:'middle'})}</g>`;
+function termButton(x,y,w,h,label,{active=false,black=false,control='',group='',action=''}={}){
+ return `<g class="terminal-button ${active?'is-active':''} ${black?'terminal-button-black':''}" ${control?`data-terminal-control="${termE(control)}" data-terminal-group="${termE(group)}" tabindex="0" role="button" aria-pressed="${active}" aria-label="${termE(label)}"`:''} ${action?`data-action="${termE(action)}" data-value="${termE(control)}"`:''}>${termRect(x,y,w,h,'var(--term-soft)',3,'class="terminal-button-bg"')}${termText(x+w/2,y+h/2+4,label,12,{anchor:'middle'})}</g>`;
 }
 function termIcon(name,x,y,size=16){
  const p={plus:'M12 3v18M3 12h18',expand:'M14 3h7v7m0-7-9 9M10 21H3v-7m0 7 9-9',panel:'M3 4h18v16H3zM15 4v16',filter:'M3 4h18l-7 8v8l-4-2v-6z',down:'m7 9 5 5 5-5',mail:'M3 5h18v14H3zM3 5l9 8 9-8',bookmark:'M5 3h14v18l-7-5-7 5zM8 7h8',list:'M4 3h16v18H4zM8 7h8M8 11h8M8 15h8',clock:'M12 6v6l4 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',exchange:'M5 8h14l-4-4M19 16H5l4 4M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',download:'M12 2v13m-4-4 4 4 4-4M3 15v6h18v-6',gift:'M3 8h18v5H3zM5 13v9h14v-9M12 8v14M12 8C0 8 5-3 12 8c7-11 12 0 0 0',settings:'M9 2h6l1 4 4 1 2 5-3 3v4l-5 3-3-3-4 1-4-4 1-4-2-3 3-5 4 1zM16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0'}[name]||'';
@@ -80,8 +80,10 @@ function termHeatmap(){
  const body=cells.map(([x,y,w,h,base,name,value])=>termMark('semantic',value.startsWith('-')?1:0,base,`${name} ${value}`,termRect(x,y,w,h,'currentColor',0,'stroke="var(--term-bg)" stroke-width=".6" data-terminal-area')+termText(x+w/2,y+13,name,name.length>20?6.3:name.length>13?8:11,{fill:'#fff',anchor:'middle'})+termText(x+w/2,y+27,value,11,{fill:'#fff',anchor:'middle'}))).join('');
  return termCard('stock-heatmap',878,83,314,176,'Stock Heatmap ›',body);
 }
+// The line of a bar and line combination takes the line palette, like the shared charts.
+const termComboLine=(base,label,content)=>termMark('line',0,base,label,content);
 function termTraceSet(id){
- return terminalReference.lines[id].map(({base,points},i)=>termCat(id==='yield'?2:i,base,`${id} ${i+1}`,`<path d="M${points.map(p=>p.join(' ')).join('L')}" fill="none" stroke="currentColor" stroke-width="1.25" data-terminal-trace="${id}:${i}" data-terminal-line data-terminal-width="1.25"/>`)).join('');
+ return terminalReference.lines[id].map(({base,points},i)=>(id==='yield'?termComboLine:termCat.bind(null,i))(base,`${id} ${i+1}`,`<path d="M${points.map(p=>p.join(' ')).join('L')}" fill="none" stroke="currentColor" stroke-width="1.25" data-terminal-trace="${id}:${i}" data-terminal-line data-terminal-width="1.25"/>`)).join('');
 }
 function termBarSet(id){
  return terminalReference.bars[id].map(({base,x,y,width,height})=>{const index=termSeriesColors.indexOf(base),slot=base==='#168CB8'?1:termSeriesSlots[index];return termCat(slot,base,`${id} bar`,termRect(x,y,width,height,'currentColor',0,'data-terminal-area'));}).join('');
@@ -118,14 +120,15 @@ function termEtfFlow(){
  let body='';
  ['All','BTC','ETH','XRP','SOL'].forEach((name,i)=>body+=termButton(1202+i*61,297,56,23,name,{active:!i,control:name,group:'etf-asset'}));
  ['1M','3M','1Y','YTD','3Y'].forEach((name,i)=>body+=termButton(1202+i*60.5,328,60,22,name,{active:!i,control:name,group:'etf-period'}));
- body+=termRect(1202,328,301,22,'none',3,'stroke="var(--term-border)"')+termLegend(1207,370,['Factory1','Factory2','Factory3','Factory4'],70,11.5)+termLegend(1207,388,[{name:'Factory5',index:4,base:termSeriesColors[4]},{name:'legend',index:5,base:termSeriesColors[5]},{name:'legend',index:6,base:termSeriesColors[6]},{name:'legend',index:7,base:termSeriesColors[7]}],70,11.5);
- const colors=['#4C7BFF','#FF8759','#EF60AB','#57D4C0','#A783EF','#E5B045','#ABC53B','#56C6EF'],amounts=[25,17.3,15.3,8.8,12,8.6,7.5,5.5];let angle=-Math.PI/2;
- amounts.forEach((value,i)=>{const end=angle+value/100*Math.PI*2;body+=termCat(termSeriesSlots[i],colors[i],`Factory${i+1}`,`<path d="${termArc(1351,500,77,47,angle,end)}" fill="currentColor" stroke="var(--term-bg)" stroke-width=".6" data-terminal-area/>`);angle=end;});
+ body+=termRect(1202,328,301,22,'none',3,'stroke="var(--term-border)"')+termLegend(1207,370,['Factory1','Factory2','Factory3','Factory4'],70,11.5)+termLegend(1207,388,[{name:'Factory5',index:4,base:termSeriesColors[4]},{name:'legend',index:5,base:termSeriesColors[5]},{name:'legend',index:6,base:termSeriesColors[6]}],70,11.5);
+ // The slices are shares of the ring, so they still close after dropping to seven items.
+ const colors=['#4C7BFF','#FF8759','#EF60AB','#57D4C0','#A783EF','#E5B045','#ABC53B'],amounts=[25,17.3,15.3,8.8,12,8.6,7.5],total=amounts.reduce((sum,value)=>sum+value);let angle=-Math.PI/2;
+ amounts.forEach((value,i)=>{const end=angle+value/total*Math.PI*2;body+=termCat(termSeriesSlots[i],colors[i],`Factory${i+1}`,`<path d="${termArc(1351,500,77,47,angle,end)}" fill="currentColor" stroke="var(--term-bg)" stroke-width=".6" data-terminal-area/>`);angle=end;});
  body+=termText(1351,495,'Total',12,{fill:'var(--term-muted)',anchor:'middle'})+termText(1351,515,'155.25M',16,{bold:true,anchor:'middle'});
  return termCard('crypto-etf-flow',1194,266,318,350,'Crypto ETF Fund Flow',body);
 }
 function termYield(){
- const body=termLegend(251,665,['Factory1','Factory2','Factory3'],71)+termGrid(246,683,272,117,['6.0%','5.5%','5.0%','4.5%','4.0%','3.5%','3.0%','2.5%'])+termBarSet('yield')+termTraceSet('yield')+[ [285,760],[336,724],[386,793],[438,726],[489,688] ].map(([x,y])=>termCat(2,'#E57E17','Factory3',`<circle cx="${x}" cy="${y}" r="3.8" fill="currentColor"/>`)).join('')+termDates([272,325,377,430,483],817,['1M','3M','6M','1Y','2Y']);
+ const body=termLegend(251,665,['Factory1','Factory2',{name:'Factory3',index:0,role:'line',base:'#E57E17'}],71)+termGrid(246,683,272,117,['6.0%','5.5%','5.0%','4.5%','4.0%','3.5%','3.0%','2.5%'])+termBarSet('yield')+termTraceSet('yield')+[ [285,760],[336,724],[386,793],[438,726],[489,688] ].map(([x,y])=>termComboLine('#E57E17','Factory3',`<circle cx="${x}" cy="${y}" r="3.8" fill="currentColor"/>`)).join('')+termDates([272,325,377,430,483],817,['1M','3M','6M','1Y','2Y']);
  return termCard('global-yield-curves',238,623,321,205,'Global yield curves',body);
 }
 function termBondsTable(){

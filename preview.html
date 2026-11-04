@@ -112,6 +112,7 @@
 .aime-mobile .aime-content-scroll{overflow-x:hidden;-webkit-overflow-scrolling:touch}
 .aime-mobile .aime-quick-actions{overflow-x:auto;scrollbar-width:none}
 .aime-mobile .aime-quick-actions>span{flex-shrink:0}
+.aime-theme-switch{display:inline-flex;align-items:center;gap:4px;flex-shrink:0;min-height:36px;padding:0 10px;border:1px solid var(--aime-line);border-radius:18px;background:var(--aime-bg);color:var(--aime-text);font-size:13px}.aime-theme-switch svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .aime-mobile .aime-chart-card>header{flex-wrap:wrap}
 .aime-mobile .aime-chart-card>header>button:first-child{overflow-wrap:anywhere;min-height:44px}
 .aime-mobile .aime-insert{display:block;min-width:44px;min-height:44px}
@@ -137,18 +138,20 @@
 .viewer-toolbar .palette-tabs{max-height:none}.viewer-toolbar .side-scroll{padding:0 18px 16px}
 .live-viewer .aime-chart-card>header>button{pointer-events:none}
 .live-viewer .aime-preview-controls>button{font-size:12px}
-.aime-viewer-palettes{position:relative;display:flex;flex:1;min-width:0;gap:6px;overflow-x:auto;scrollbar-width:none}
+.aime-viewer-palettes{position:relative;display:flex;flex-shrink:0;gap:6px}
+.aime-row-pinned{position:sticky;left:0;z-index:1;display:flex;align-items:center;gap:6px;flex-shrink:0;background:var(--aime-bg);padding-right:2px}
+.aime-mobile .aime-quick-actions{align-items:center}.aime-quick-actions .live-dot{padding:0;border:0}
+.live-viewer.aime-mobile .aime-page{padding-top:env(safe-area-inset-top,0px)}
 .aime-viewer-palettes button{display:flex;align-items:center;gap:5px;flex:0 0 auto;min-height:36px;padding:0 10px;border:1px solid #e5e5e5;border-radius:18px;color:#666;font-size:12px;white-space:nowrap}
 .aime-viewer-palettes button.active{background:#f1f3ff;border-color:#b9c4ff;color:#404d89}
 .aime-viewer-palettes i{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .live-viewer .aime-preview-controls{gap:2px}
 .live-viewer .aime-preview-controls>button{display:grid;place-items:center;min-width:36px;padding:8px 6px}
-.aime-viewer-palettes{margin-left:6px}
-.aime-preview-controls>.live-dot{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:#a1a1aa}
-.aime-preview-controls>.live-dot.is-connected{background:#16a34a;animation:live-breathe 2s ease-in-out infinite}
-.aime-preview-controls>.live-dot.is-disconnected{background:#dc2626}
+.live-dot{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:#a1a1aa}
+.live-dot.is-connected{background:#16a34a;animation:live-breathe 2s ease-in-out infinite}
+.live-dot.is-disconnected{background:#dc2626}
 @keyframes live-breathe{0%,100%{opacity:1;box-shadow:0 0 0 0 #16a34a66}50%{opacity:.55;box-shadow:0 0 0 4px #16a34a00}}
-@media(prefers-reduced-motion:reduce){.aime-preview-controls>.live-dot.is-connected{animation:none}}
+@media(prefers-reduced-motion:reduce){.live-dot.is-connected{animation:none}}
 .aime-mobile:has(.aime-stage[data-aime-theme="dark"]) .aime-viewer-palettes button{border-color:#2e2e2e;color:#a0a0a0}
 .aime-mobile:has(.aime-stage[data-aime-theme="dark"]) .aime-viewer-palettes button.active{background:#292a31;border-color:#5268de;color:#ccd4ff}
 .live-unavailable #preview-canvas{visibility:hidden}
@@ -2980,14 +2983,14 @@ const surfaceNames = ['页面背景', '卡片背景', '主要文字', '次要文
 // Palettes without their own line colors take the end of the categorical list, last color first.
 const defaultLines = colors => colors.slice(-2).reverse().map((color, i) => ({ id: `line-${i + 1}`, name: `折线 ${String(i + 1).padStart(2, '0')}`, hex: color.hex }));
 const colorList = (list, names, prefix) => list.map((hex, i) => ({ id: `${prefix}-${i + 1}`, name: names?.[i] || `系列 ${String(i + 1).padStart(2, '0')}`, hex: normalizeColor(hex) }));
-function createPalette({ id, name, light, dark, names, lines, up = '#009B67', down = '#FF381A', darkUp = up, darkDown = down, background, card = background, source = '自定义色板', availableThemes = ['light', 'dark'] }) {
+function createPalette({ id, name, light, dark, names, lines, up = '#009B67', down = '#FF381A', darkUp = up, darkDown = down, source = '自定义色板', availableThemes = ['light', 'dark'] }) {
   return {
     schemaVersion: 1, id, name, source, availableThemes,
     themes: Object.fromEntries(['light', 'dark'].map(theme => [theme, {
       categorical: colorList(theme === 'light' ? (light || dark) : (dark || light), names, 'category'),
       line: lines ? colorList(lines, lines.map((_, i) => `折线 ${String(i + 1).padStart(2, '0')}`), 'line') : defaultLines(colorList(theme === 'light' ? (light || dark) : (dark || light), names, 'category')),
       semantic: colorList(theme === 'light' ? [up, down] : [darkUp, darkDown], ['上涨', '下跌'], 'state'),
-      surface: colorList(background ? [background[theme], card[theme], ...surfaces[theme].slice(2)] : surfaces[theme], surfaceNames, 'surface')
+      surface: colorList(surfaces[theme], surfaceNames, 'surface')
     }]))
   };
 }
@@ -3131,17 +3134,25 @@ function fromColors(name, colors) {
 
 const presets = [
   createPalette({ id: 'ainvest', name: 'Ainvest 原始色板', light: ['#265FFC', '#38D1FF', '#F564B9', '#733ED6', '#00CCC3', '#273D8F', '#FF7040'], names: ['主蓝', '天蓝', '粉', '紫', '青', '深蓝', '橙'], lines: ['#FF7040', '#9EA9C7'], source: '本轮用户确认 · 7 个分类色 · 黑白版色值一致' }),
-  createPalette({ id: 'claude', name: 'Claude', light: ['#2A78D6', '#EB6834', '#1BAF7A', '#EDA100', '#E87BA4', '#008300', '#4A3AA7', '#E34948'], dark: ['#3987E5', '#D95926', '#199E70', '#C98500', '#D55181', '#008300', '#9085E9', '#E66767'], names: ['蓝', '橙', '水绿', '黄', '洋红', '绿', '紫', '红'], background: { light: '#F5F5F5', dark: '#000000' }, card: { light: '#FFFFFF', dark: '#191919' }, source: '用户提供 · 8 个分类色 · 涨跌色沿用默认' }),
-  createPalette({ id: 'tradingview', name: 'TradingView', light: ['#1F8CFF', '#4DD0E1', '#F57F17', '#B388FF', '#FBC02D', '#5B9CF6', '#EA80FC'], up: '#089981', down: '#F23645', background: { light: '#F5F5F5', dark: '#000000' }, card: { light: '#FFFFFF', dark: '#1A1A1A' }, source: '用户提供 · 7 个分类色 · 黑白版色值一致' }),
-  createPalette({ id: 'simply-wall-st', name: 'Simply Wall St', light: ['#1D96DC', '#19B299', '#BA4986', '#E6B068', '#9F50E7'], dark: ['#1D96DC', '#73E6D5', '#BA4986', '#E6B068', '#9F50E7'], names: ['首色', '轮循 1', '轮循 2', '轮循 3', '轮循 4'], up: '#12A15B', down: '#E74142', darkUp: '#2EC87C', darkDown: '#E74142', background: { light: '#F6F4EF', dark: '#1A1A1A' }, card: { light: '#EFECE6', dark: '#212121' }, source: '色板研究 · 5 个分类色 · 涨跌色取自走势线像素' }),
+  createPalette({ id: 'claude', name: 'Claude', light: ['#2A78D6', '#EB6834', '#1BAF7A', '#EDA100', '#E87BA4', '#008300', '#4A3AA7', '#E34948'], dark: ['#3987E5', '#D95926', '#199E70', '#C98500', '#D55181', '#008300', '#9085E9', '#E66767'], names: ['蓝', '橙', '水绿', '黄', '洋红', '绿', '紫', '红'], source: '用户提供 · 8 个分类色 · 涨跌色沿用默认' }),
+  createPalette({ id: 'tradingview', name: 'TradingView', light: ['#1F8CFF', '#4DD0E1', '#F57F17', '#B388FF', '#FBC02D', '#5B9CF6', '#EA80FC'], up: '#089981', down: '#F23645', source: '用户提供 · 7 个分类色 · 黑白版色值一致' }),
+  createPalette({ id: 'simply-wall-st', name: 'Simply Wall St', light: ['#1D96DC', '#19B299', '#BA4986', '#E6B068', '#9F50E7'], dark: ['#1D96DC', '#73E6D5', '#BA4986', '#E6B068', '#9F50E7'], names: ['首色', '轮循 1', '轮循 2', '轮循 3', '轮循 4'], up: '#12A15B', down: '#E74142', darkUp: '#2EC87C', darkDown: '#E74142', source: '色板研究 · 5 个分类色 · 涨跌色取自走势线像素' }),
   // app.js resets the retired `robinhood` id to the default palette on load.
-  createPalette({ id: 'robinhood-brand', name: 'Robinhood', light: ['#89C5FF', '#987AEC', '#D291D2', '#EFAAA5', '#FCA000', '#FFC557', '#FDDE00', '#C2F43B', '#80E764', '#00C805', '#84C6D2'], dark: ['#89C5FF', '#AF95F8', '#E2A6E2', '#F9C4C0', '#FFAA05', '#FFC557', '#FEE600', '#D8FF6E', '#7EE862', '#00C805', '#A8E4EC'], up: '#00C000', down: '#FF3800', darkUp: '#00C805', darkDown: '#FF5000', background: { light: '#F5F5F5', dark: '#000000' }, card: { light: '#FFFFFF', dark: '#1A1A1A' }, source: '用户提供 · 11 个分类色' })
+  createPalette({ id: 'robinhood-brand', name: 'Robinhood', light: ['#89C5FF', '#987AEC', '#D291D2', '#EFAAA5', '#FCA000', '#FFC557', '#FDDE00', '#C2F43B', '#80E764', '#00C805', '#84C6D2'], dark: ['#89C5FF', '#AF95F8', '#E2A6E2', '#F9C4C0', '#FFAA05', '#FFC557', '#FEE600', '#D8FF6E', '#7EE862', '#00C805', '#A8E4EC'], up: '#00C000', down: '#FF3800', darkUp: '#00C805', darkDown: '#FF5000', source: '用户提供 · 11 个分类色' })
 ];
-// The Aime conversation sits directly on its background, so these presets use a different one there.
-const aimeBackgrounds = {
-  claude: { light: '#FFFFFF', dark: '#191919' },
-  'robinhood-brand': { light: '#FFFFFF' }
+// Every preset uses the original interface colors. Browsers and links may still store these older backgrounds; any other value was edited by hand.
+const retiredBackgrounds = {
+  claude: { light: ['#F5F5F5', '#FFFFFF'], dark: ['#000000', '#191919'] },
+  tradingview: { light: ['#F5F5F5', '#FFFFFF'], dark: ['#000000', '#1A1A1A'] },
+  'simply-wall-st': { light: ['#F6F4EF', '#EFECE6'], dark: ['#1A1A1A', '#212121'] },
+  'robinhood-brand': { light: ['#F5F5F5', '#FFFFFF'], dark: ['#000000', '#1A1A1A'] }
 };
+function dropRetiredBackgrounds(palette) {
+  for (const theme of ['light', 'dark']) retiredBackgrounds[palette.id]?.[theme].forEach((hex, i) => {
+    if (palette.themes[theme].surface[i].hex === hex) palette.themes[theme].surface[i].hex = surfaces[theme][i];
+  });
+  return palette;
+}
 
 // Chart geometry traced from the user-provided 财报分析.png. Values are screenshot geometry, not a live financial feed.
 // Bar/ratio coordinates use the chart-local coordinate system; financialDividendYieldTrace uses the 1600px logical page.
@@ -3685,7 +3696,6 @@ function aimeChartConfig(module){
 
 
 
-
 const aimeEsc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const aimeGlyph=(name)=>{const shapes={menu:'M5 6h14M5 12h10M5 18h6',edit:'m14 4 6 6-9 9H5v-6zM12 6l6 6',sound:'m4 9 4 0 5-4v14l-5-4H4zM17 8l4 8M21 8l-4 8',plus:'M12 4v16M4 12h16',arrow:'M12 20V4m-6 6 6-6 6 6',robot:'M5 7h14v12H5zM9 7V4h6M8 12h.1M16 12h.1M9 16h6',down:'M12 4v16m-6-6 6 6 6-6',copy:'M11 9h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2zM5.5 15A1.5 1.5 0 0 1 4 13.5v-8A1.5 1.5 0 0 1 5.5 4h8A1.5 1.5 0 0 1 15 5.5',download:'M12 4v11m-5-5 5 5 5-5M4 16v4h16v-4',expand:'M14 4h6v6M10 20H4v-6',prev:'M15 5l-7 7 7 7',next:'M9 5l7 7-7 7',more:'M5 12h.01M12 12h.01M19 12h.01'};return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${shapes[name]||shapes.edit}"/></svg>`;};
 function defaultAimeBoard(){
@@ -3707,8 +3717,10 @@ function aimeCard(module,board){
   return `<section class="aime-chart-card ${board.selected===module.id?'is-selected':''}" data-module-id="${module.id}"><header><button data-action="module-select" data-value="${module.id}" aria-pressed="${board.selected===module.id}">${aimeEsc(title)}</button>${aimeCardTools(module)}<button class="aime-insert" data-action="module-picker" data-value="${module.id}" aria-label="在此图表后添加组件">＋</button></header>${compactModuleTools(module,board)}<div class="aime-chart-body"><div class="compact-chart-target" data-chart-id="${module.id}" data-chart-type="${module.type}"></div></div></section>`;
 }
 const aimeCashCopy=()=>`<section class="aime-copy"><h2>Cash-return policy is intact, though not a yield play</h2><p>Current dividend yield is a modest 0.36 %4, but Apple has paid a dividend for 23 consecutive years and has grown it for 14 straight years</p></section>`;
-function renderAimeScene(board,theme){
-  return `<div class="aime-stage" data-aime-theme="${theme}"><article class="aime-page" aria-label="Aime 对话预览"><div class="aime-status" aria-hidden="true"><b>9:41</b><span>▮▮▮ ᯤ ▰</span></div><header class="aime-navigation"><span class="aime-round" aria-hidden="true">${aimeGlyph('menu')}</span><div class="aime-navigation-tabs"><b>Aime</b><span>Explore</span></div><span class="aime-round aime-nav-tools" aria-hidden="true">${aimeGlyph('sound')}${aimeGlyph('edit')}</span></header><div class="aime-content-scroll" tabindex="0" aria-label="对话内容"><div class="aime-question">How about aapl</div><div class="aime-answer-source"><span class="aime-bot">${aimeGlyph('robot')}</span><span>Aime is ready with the answer ›<small>21s · 6 sources</small></span></div><p class="aime-bottom-line">Bottom-line: <a>Apple (AAPL)</a> still looks like a high-quality compounder, but the shares are running hot—momentum-oriented traders may want to wait for a breather, while long-term investors can keep riding the trend and add on dips.</p><section class="aime-fundamentals"><h2>Fundamentals remain rock-solid</h2><ul><li>Latest quarter: revenue $111.18 B, net income $29.58 B, diluted EPS $2.011.</li><li>Year-over-year growth is equally impressive: revenue +16.6 %, net income +19.36 %, EPS +21.82 %.</li><li>Even over a three-year lens, revenue CAGR sits at 4.2 %, net income CAGR at 7.46 %, and EPS CAGR at 10.32 %—a respectable grind for a $3 T company3.</li></ul></section>${board.modules.filter(m=>!m.hidden).map(m=>(['aime-duration','aime-factors'].includes(m.fixture)?aimeCashCopy():'')+aimeCard(m,board)).join('')}<button class="aime-add-chart" data-action="module-picker">＋ 添加可视化组件</button><section class="aime-copy aime-closing"><h2>Street sentiment stays bullish</h2><p>Multiple recent targets cluster around $325–$400, with the latest print at $400 and a consistent ”Buy“ consensus10.</p><h2>Strategic catalysts &amp; risks to watch</h2><ul><li>Management just allocated &gt;10 % of revenue to R&amp;D—Apple’s highest level in 30 years—signaling a deep AI push11.</li><li>Options market expects a big move: 30-day implied volatility for puts is 0.232112, while near-term weekly calls carry triple-digit implied vols13.</li><li>Upcoming earnings (next report due July 30, 202614) could spark volatility, yet fundamentals and buyback authorization ($100 B program15) provide a cushion.</li></ul></section></div><footer class="aime-composer"><div class="aime-quick-actions"><span>ϟ Fast ⌄</span><span>▧ Price Forecast</span><span>◉ Circle Analysis</span></div><div class="aime-composer-field"><span>${theme==='dark'?'Send message or hold to talk':'How about aapl'}</span><button data-action="module-picker" aria-label="添加对话图表组件">${aimeGlyph('plus')}</button><i aria-hidden="true">${aimeGlyph('arrow')}</i></div><div class="aime-home-indicator"></div></footer></article></div>`;
+// Phones switch theme and palette from the row above the input, in place of the model pill.
+const aimeThemeIcon=theme=>`<svg viewBox="0 0 24 24" aria-hidden="true">${theme==='light'?'<path d="M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14z"/>':'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/>'}</svg>`;
+function renderAimeScene(board,theme,{themeSwitch=null}={}){
+  return `<div class="aime-stage" data-aime-theme="${theme}"><article class="aime-page" aria-label="Aime 对话预览"><div class="aime-status" aria-hidden="true"><b>9:41</b><span>▮▮▮ ᯤ ▰</span></div><header class="aime-navigation"><span class="aime-round" aria-hidden="true">${aimeGlyph('menu')}</span><div class="aime-navigation-tabs"><b>Aime</b><span>Explore</span></div><span class="aime-round aime-nav-tools" aria-hidden="true">${aimeGlyph('sound')}${aimeGlyph('edit')}</span></header><div class="aime-content-scroll" tabindex="0" aria-label="对话内容"><div class="aime-question">How about aapl</div><div class="aime-answer-source"><span class="aime-bot">${aimeGlyph('robot')}</span><span>Aime is ready with the answer ›<small>21s · 6 sources</small></span></div><p class="aime-bottom-line">Bottom-line: <a>Apple (AAPL)</a> still looks like a high-quality compounder, but the shares are running hot—momentum-oriented traders may want to wait for a breather, while long-term investors can keep riding the trend and add on dips.</p><section class="aime-fundamentals"><h2>Fundamentals remain rock-solid</h2><ul><li>Latest quarter: revenue $111.18 B, net income $29.58 B, diluted EPS $2.011.</li><li>Year-over-year growth is equally impressive: revenue +16.6 %, net income +19.36 %, EPS +21.82 %.</li><li>Even over a three-year lens, revenue CAGR sits at 4.2 %, net income CAGR at 7.46 %, and EPS CAGR at 10.32 %—a respectable grind for a $3 T company3.</li></ul></section>${board.modules.filter(m=>!m.hidden).map(m=>(['aime-duration','aime-factors'].includes(m.fixture)?aimeCashCopy():'')+aimeCard(m,board)).join('')}<button class="aime-add-chart" data-action="module-picker">＋ 添加可视化组件</button><section class="aime-copy aime-closing"><h2>Street sentiment stays bullish</h2><p>Multiple recent targets cluster around $325–$400, with the latest print at $400 and a consistent ”Buy“ consensus10.</p><h2>Strategic catalysts &amp; risks to watch</h2><ul><li>Management just allocated &gt;10 % of revenue to R&amp;D—Apple’s highest level in 30 years—signaling a deep AI push11.</li><li>Options market expects a big move: 30-day implied volatility for puts is 0.232112, while near-term weekly calls carry triple-digit implied vols13.</li><li>Upcoming earnings (next report due July 30, 202614) could spark volatility, yet fundamentals and buyback authorization ($100 B program15) provide a cushion.</li></ul></section></div><footer class="aime-composer"><div class="aime-quick-actions">${themeSwitch?`<div class="aime-row-pinned">${themeSwitch.status||''}<button class="aime-theme-switch" data-action="theme" data-value="${theme==='light'?'dark':'light'}" aria-label="切换到${theme==='light'?'深色':'浅色'}主题" ${themeSwitch.disabled?'disabled':''}>${aimeThemeIcon(theme)}${theme==='light'?'深色':'浅色'}</button></div>${themeSwitch.palettes||''}`:'<span>ϟ Fast ⌄</span><span>▧ Price Forecast</span><span>◉ Circle Analysis</span>'}</div><div class="aime-composer-field"><span>${theme==='dark'?'Send message or hold to talk':'How about aapl'}</span><button data-action="module-picker" aria-label="添加对话图表组件">${aimeGlyph('plus')}</button><i aria-hidden="true">${aimeGlyph('arrow')}</i></div><div class="aime-home-indicator"></div></footer></article></div>`;
 }
 function aimeBoardPanel(board){
   let html=compactBoardPanel(board);
@@ -3723,10 +3735,8 @@ function aimeBoardPanel(board){
 }
 // Same values as .aime-stage in styles.css; the conversation keeps them until a surface color is edited.
 const aimeDefaults={light:['#FFFFFF','#FFFFFF','#202020','#929292','#E5E5E5'],dark:['#141414','#141414','#CCCCCC','#737373','#2E2E2E']};
-// An edited page background wins over the preset's Aime background.
 function aimeSurfaceHex(palette,theme,i){
-  const hex=palette.themes[theme].surface[i].hex,preset=presets.find(p=>p.id===palette.id);
-  if(i===0&&hex===preset?.themes[theme].surface[0].hex&&aimeBackgrounds[palette.id]?.[theme])return aimeBackgrounds[palette.id][theme];
+  const hex=palette.themes[theme].surface[i].hex;
   return hex===surfaces[theme][i]?aimeDefaults[theme][i]??hex:hex;
 }
 // What the conversation really shows, for the color console. Never write this back to the palette.
@@ -3766,10 +3776,10 @@ const termDates=(xs,y,labels)=>xs.map((x,i)=>termText(x,y,labels[i],11.5,{anchor
 const termSeriesColors=['#1F5FD6','#D9720B','#C14696','#0E9C84','#7647C8','#BB8D13','#8AA126','#168CB8'];
 const termSeriesSlots=[0,1,2,3,4,5,6,7];
 function termLegend(x,y,items,spacing=72,size=12){
- return items.map((item,i)=>{const name=typeof item==='string'?item:item.name,index=typeof item==='string'?i:item.index,base=typeof item==='string'?termSeriesColors[i]:item.base;return termCat(termSeriesSlots[index]??index,base,name,`<circle cx="${x+i*spacing}" cy="${y-4}" r="4.6" fill="currentColor"/>`)+termText(x+9+i*spacing,y,name,size);}).join('');
+ return items.map((item,i)=>{const name=typeof item==='string'?item:item.name,index=typeof item==='string'?i:item.index,base=typeof item==='string'?termSeriesColors[i]:item.base;return termMark(item.role||'categorical',termSeriesSlots[index]??index,base,name,`<circle cx="${x+i*spacing}" cy="${y-4}" r="4.6" fill="currentColor"/>`)+termText(x+9+i*spacing,y,name,size);}).join('');
 }
-function termButton(x,y,w,h,label,{active=false,black=false,control='',group=''}={}){
- return `<g class="terminal-button ${active?'is-active':''} ${black?'terminal-button-black':''}" ${control?`data-terminal-control="${termE(control)}" data-terminal-group="${termE(group)}" tabindex="0" role="button" aria-pressed="${active}" aria-label="${termE(label)}"`:''}>${termRect(x,y,w,h,'var(--term-soft)',3,'class="terminal-button-bg"')}${termText(x+w/2,y+h/2+4,label,12,{anchor:'middle'})}</g>`;
+function termButton(x,y,w,h,label,{active=false,black=false,control='',group='',action=''}={}){
+ return `<g class="terminal-button ${active?'is-active':''} ${black?'terminal-button-black':''}" ${control?`data-terminal-control="${termE(control)}" data-terminal-group="${termE(group)}" tabindex="0" role="button" aria-pressed="${active}" aria-label="${termE(label)}"`:''} ${action?`data-action="${termE(action)}" data-value="${termE(control)}"`:''}>${termRect(x,y,w,h,'var(--term-soft)',3,'class="terminal-button-bg"')}${termText(x+w/2,y+h/2+4,label,12,{anchor:'middle'})}</g>`;
 }
 function termIcon(name,x,y,size=16){
  const p={plus:'M12 3v18M3 12h18',expand:'M14 3h7v7m0-7-9 9M10 21H3v-7m0 7 9-9',panel:'M3 4h18v16H3zM15 4v16',filter:'M3 4h18l-7 8v8l-4-2v-6z',down:'m7 9 5 5 5-5',mail:'M3 5h18v14H3zM3 5l9 8 9-8',bookmark:'M5 3h14v18l-7-5-7 5zM8 7h8',list:'M4 3h16v18H4zM8 7h8M8 11h8M8 15h8',clock:'M12 6v6l4 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',exchange:'M5 8h14l-4-4M19 16H5l4 4M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',download:'M12 2v13m-4-4 4 4 4-4M3 15v6h18v-6',gift:'M3 8h18v5H3zM5 13v9h14v-9M12 8v14M12 8C0 8 5-3 12 8c7-11 12 0 0 0',settings:'M9 2h6l1 4 4 1 2 5-3 3v4l-5 3-3-3-4 1-4-4 1-4-2-3 3-5 4 1zM16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0'}[name]||'';
@@ -3829,8 +3839,10 @@ function termHeatmap(){
  const body=cells.map(([x,y,w,h,base,name,value])=>termMark('semantic',value.startsWith('-')?1:0,base,`${name} ${value}`,termRect(x,y,w,h,'currentColor',0,'stroke="var(--term-bg)" stroke-width=".6" data-terminal-area')+termText(x+w/2,y+13,name,name.length>20?6.3:name.length>13?8:11,{fill:'#fff',anchor:'middle'})+termText(x+w/2,y+27,value,11,{fill:'#fff',anchor:'middle'}))).join('');
  return termCard('stock-heatmap',878,83,314,176,'Stock Heatmap ›',body);
 }
+// The line of a bar and line combination takes the line palette, like the shared charts.
+const termComboLine=(base,label,content)=>termMark('line',0,base,label,content);
 function termTraceSet(id){
- return terminalReference.lines[id].map(({base,points},i)=>termCat(id==='yield'?2:i,base,`${id} ${i+1}`,`<path d="M${points.map(p=>p.join(' ')).join('L')}" fill="none" stroke="currentColor" stroke-width="1.25" data-terminal-trace="${id}:${i}" data-terminal-line data-terminal-width="1.25"/>`)).join('');
+ return terminalReference.lines[id].map(({base,points},i)=>(id==='yield'?termComboLine:termCat.bind(null,i))(base,`${id} ${i+1}`,`<path d="M${points.map(p=>p.join(' ')).join('L')}" fill="none" stroke="currentColor" stroke-width="1.25" data-terminal-trace="${id}:${i}" data-terminal-line data-terminal-width="1.25"/>`)).join('');
 }
 function termBarSet(id){
  return terminalReference.bars[id].map(({base,x,y,width,height})=>{const index=termSeriesColors.indexOf(base),slot=base==='#168CB8'?1:termSeriesSlots[index];return termCat(slot,base,`${id} bar`,termRect(x,y,width,height,'currentColor',0,'data-terminal-area'));}).join('');
@@ -3867,14 +3879,15 @@ function termEtfFlow(){
  let body='';
  ['All','BTC','ETH','XRP','SOL'].forEach((name,i)=>body+=termButton(1202+i*61,297,56,23,name,{active:!i,control:name,group:'etf-asset'}));
  ['1M','3M','1Y','YTD','3Y'].forEach((name,i)=>body+=termButton(1202+i*60.5,328,60,22,name,{active:!i,control:name,group:'etf-period'}));
- body+=termRect(1202,328,301,22,'none',3,'stroke="var(--term-border)"')+termLegend(1207,370,['Factory1','Factory2','Factory3','Factory4'],70,11.5)+termLegend(1207,388,[{name:'Factory5',index:4,base:termSeriesColors[4]},{name:'legend',index:5,base:termSeriesColors[5]},{name:'legend',index:6,base:termSeriesColors[6]},{name:'legend',index:7,base:termSeriesColors[7]}],70,11.5);
- const colors=['#4C7BFF','#FF8759','#EF60AB','#57D4C0','#A783EF','#E5B045','#ABC53B','#56C6EF'],amounts=[25,17.3,15.3,8.8,12,8.6,7.5,5.5];let angle=-Math.PI/2;
- amounts.forEach((value,i)=>{const end=angle+value/100*Math.PI*2;body+=termCat(termSeriesSlots[i],colors[i],`Factory${i+1}`,`<path d="${termArc(1351,500,77,47,angle,end)}" fill="currentColor" stroke="var(--term-bg)" stroke-width=".6" data-terminal-area/>`);angle=end;});
+ body+=termRect(1202,328,301,22,'none',3,'stroke="var(--term-border)"')+termLegend(1207,370,['Factory1','Factory2','Factory3','Factory4'],70,11.5)+termLegend(1207,388,[{name:'Factory5',index:4,base:termSeriesColors[4]},{name:'legend',index:5,base:termSeriesColors[5]},{name:'legend',index:6,base:termSeriesColors[6]}],70,11.5);
+ // The slices are shares of the ring, so they still close after dropping to seven items.
+ const colors=['#4C7BFF','#FF8759','#EF60AB','#57D4C0','#A783EF','#E5B045','#ABC53B'],amounts=[25,17.3,15.3,8.8,12,8.6,7.5],total=amounts.reduce((sum,value)=>sum+value);let angle=-Math.PI/2;
+ amounts.forEach((value,i)=>{const end=angle+value/total*Math.PI*2;body+=termCat(termSeriesSlots[i],colors[i],`Factory${i+1}`,`<path d="${termArc(1351,500,77,47,angle,end)}" fill="currentColor" stroke="var(--term-bg)" stroke-width=".6" data-terminal-area/>`);angle=end;});
  body+=termText(1351,495,'Total',12,{fill:'var(--term-muted)',anchor:'middle'})+termText(1351,515,'155.25M',16,{bold:true,anchor:'middle'});
  return termCard('crypto-etf-flow',1194,266,318,350,'Crypto ETF Fund Flow',body);
 }
 function termYield(){
- const body=termLegend(251,665,['Factory1','Factory2','Factory3'],71)+termGrid(246,683,272,117,['6.0%','5.5%','5.0%','4.5%','4.0%','3.5%','3.0%','2.5%'])+termBarSet('yield')+termTraceSet('yield')+[ [285,760],[336,724],[386,793],[438,726],[489,688] ].map(([x,y])=>termCat(2,'#E57E17','Factory3',`<circle cx="${x}" cy="${y}" r="3.8" fill="currentColor"/>`)).join('')+termDates([272,325,377,430,483],817,['1M','3M','6M','1Y','2Y']);
+ const body=termLegend(251,665,['Factory1','Factory2',{name:'Factory3',index:0,role:'line',base:'#E57E17'}],71)+termGrid(246,683,272,117,['6.0%','5.5%','5.0%','4.5%','4.0%','3.5%','3.0%','2.5%'])+termBarSet('yield')+termTraceSet('yield')+[ [285,760],[336,724],[386,793],[438,726],[489,688] ].map(([x,y])=>termComboLine('#E57E17','Factory3',`<circle cx="${x}" cy="${y}" r="3.8" fill="currentColor"/>`)).join('')+termDates([272,325,377,430,483],817,['1M','3M','6M','1Y','2Y']);
  return termCard('global-yield-curves',238,623,321,205,'Global yield curves',body);
 }
 function termBondsTable(){
@@ -3992,6 +4005,8 @@ const wsPath=points=>'M'+points.map(p=>p.join(' ')).join('L');
 const wsAsset=(name,x,y,w,h=w)=>`<image data-workspace-asset="${name}" href="${workspaceReference.light.assets[name]}" x="${x}" y="${y}" width="${w}" height="${h}"/>`;
 const wsDates=(xs,y,values)=>xs.map((x,i)=>wsText(x,y,values[i],11,{anchor:'middle',fill:'var(--term-muted)'})).join('');
 const wsGrid=(x,y,w,h,values)=>values.map((v,i)=>wsLine(x,y+i*h/(values.length-1),x+w,y+i*h/(values.length-1))+wsText(x+w+6,y+i*h/(values.length-1)+4,v,11,{fill:'var(--term-muted)'})).join('');
+// The line of a bar and line combination takes the line palette, like the shared charts.
+const wsComboLine=(label,body)=>termMark('line',0,'#FF7040',label,body);
 const wsLegend=(x,y,count=3,spacing=70)=>Array.from({length:count},(_,i)=>wsCat(i,`Factory${i+1}`,`<circle cx="${x+i*spacing}" cy="${y-4}" r="4.5" fill="currentColor"/>`)+wsText(x+9+i*spacing,y,`Factory${i+1}`,11)).join('');
 function wsTools(x,y){return `<path d="M${x+6.5} ${y}l2 4 4.5.6-3.3 3.2.8 4.5-4-2.1-4 2.1.8-4.5-3.3-3.2 4.5-.6Z" fill="none" stroke="var(--term-text)" stroke-width="1"/>`+termIcon('clock',x+26,y,12)+`<path d="M${x+60} ${y-1}l2 5 4 2-4 2-2 6-2-6-4-2 4-2Z" fill="var(--term-text)"/>`+wsText(x+81,y+10,'···',15,{bold:true});}
 function wsHeading(x,y,w,title,plus=true){
@@ -4008,7 +4023,7 @@ function wsBars(id){
  }).join('');
 }
 function wsTraces(id){
- return workspaceReference.light.lines[id].map((points,i)=>wsCat(id==='yield'?2:i,`${id} ${i+1}`,`<path d="${wsPath(points)}" fill="none" stroke="currentColor" stroke-width="1.2" data-terminal-width="1.2" data-terminal-line data-workspace-trace="${id}:${i}"/>`)).join('');
+ return workspaceReference.light.lines[id].map((points,i)=>(id==='yield'?wsComboLine:wsCat.bind(null,i))(`${id} ${i+1}`,`<path d="${wsPath(points)}" fill="none" stroke="currentColor" stroke-width="1.2" data-terminal-width="1.2" data-terminal-line data-workspace-trace="${id}:${i}"/>`)).join('');
 }
 function wsHeader(){
  let out=wsRect(0,0,1781,1376,'var(--ws-frame)')+wsLine(63,37,1781,37,'var(--term-border)')+wsLine(63,0,63,1376,'var(--term-border)');
@@ -4052,8 +4067,10 @@ function wsCalendar(){
 }
 function wsDonut(){
  let b='';['All','BTC','ETH','XRP','SOL'].forEach((v,i)=>b+=termButton(990+i*76.4,119,72,22,v,{active:!i,control:v,group:'workspace-etf'}));
- b+=wsLegend(995,166,4,68)+Array.from({length:4},(_,i)=>wsCat(i+4,`Factory${i+5}`,`<circle cx="${995+i*68}" cy="178" r="4.5" fill="currentColor"/>`)+wsText(1004+i*68,182,i?'legend':'Factory5',11)).join('');
- let a=-Math.PI/2;[25,17.3,15.3,8.8,12,8.6,7.5,5.5].forEach((v,i)=>{const end=a+v*Math.PI/50;b+=wsCat(i,`Factory${i+1}`,`<path d="${termArc(1178,290,74,45,a,end)}" fill="currentColor" stroke="var(--term-bg)" stroke-width=".5" data-terminal-area/>`);a=end;});
+ b+=wsLegend(995,166,4,68)+Array.from({length:3},(_,i)=>wsCat(i+4,`Factory${i+5}`,`<circle cx="${995+i*68}" cy="178" r="4.5" fill="currentColor"/>`)+wsText(1004+i*68,182,i?'legend':'Factory5',11)).join('');
+ // The slices are shares of the ring, so they still close after dropping to seven items.
+ const amounts=[25,17.3,15.3,8.8,12,8.6,7.5],total=amounts.reduce((sum,v)=>sum+v);
+ let a=-Math.PI/2;amounts.forEach((v,i)=>{const end=a+v/total*Math.PI*2;b+=wsCat(i,`Factory${i+1}`,`<path d="${termArc(1178,290,74,45,a,end)}" fill="currentColor" stroke="var(--term-bg)" stroke-width=".5" data-terminal-area/>`);a=end;});
  b+=wsText(1178,285,'Total',12,{fill:'var(--term-muted)',anchor:'middle'})+wsText(1178,305,'155.25M',16,{bold:true,anchor:'middle'});
  return wsCard('holding-donut',983,78,393,308,'ETF Holding Distribution',b,{shade:true});
 }
@@ -4067,8 +4084,8 @@ function wsNews(){
 }
 function wsYield(){
  let b='';['All','BTC','ETH','XRP','SOL'].forEach((v,i)=>b+=termButton(79+i*59,744,55,22,v,{active:!i,control:v,group:'workspace-yield-filter'}));
- b+=wsLegend(84,785,3,68)+wsGrid(79,801,410,161,['6.0%','5.5%','5.0%','4.5%','4.0%','3.5%','3.0%','2.5%'])+wsBars('yield')+wsTraces('yield');
- const pts=workspaceReference.light.lines.yield[0];for(const x of [109,166,223,279,336,392,449]){const p=pts.reduce((a,b)=>Math.abs(a[0]-x)<Math.abs(b[0]-x)?a:b);b+=wsCat(2,'Factory3',`<circle cx="${p[0]}" cy="${p[1]}" r="3.8" fill="currentColor"/>`);}
+ b+=wsLegend(84,785,2,68)+wsComboLine('Factory3',`<circle cx="220" cy="781" r="4.5" fill="currentColor"/>`)+wsText(229,785,'Factory3',11)+wsGrid(79,801,410,161,['6.0%','5.5%','5.0%','4.5%','4.0%','3.5%','3.0%','2.5%'])+wsBars('yield')+wsTraces('yield');
+ const pts=workspaceReference.light.lines.yield[0];for(const x of [109,166,223,279,336,392,449]){const p=pts.reduce((a,b)=>Math.abs(a[0]-x)<Math.abs(b[0]-x)?a:b);b+=wsComboLine('Factory3',`<circle cx="${p[0]}" cy="${p[1]}" r="3.8" fill="currentColor"/>`);}
  return wsCard('yield',71,702,451,287,'ETF Holding Distribution',b+wsDates([107,164,221,278,335,392,449],978,['1M','3M','6M','1Y','2Y','3Y','5Y']));
 }
 function wsTesla(y,x=535){return wsAsset('TSLA',x,y-13,16)+wsText(x+18,y,'TSLA',11.5)+wsText(x+49,y,'Testa',11.5,{fill:'var(--term-muted)'})+wsText(x+200,y,'$424.00',11.5)+wsSemantic(false,'TSLA quote',wsText(x+249,y,'-4.39 (-2.52%)',11,{fill:'currentColor'}))+wsText(x+327,y,'After-Hours 20:00 ET',10,{fill:'var(--term-muted)'});}
@@ -4078,8 +4095,10 @@ function wsRates(){
  return wsCard('rates',527,702,450,287,'Quick Quote',b);
 }
 function wsSector(){
- let b='',x=990;[122,80,44,35,27,19,19,19,12].forEach((w,i)=>{const width=w;b+=wsCat(i,'Holding sector',wsRect(x,742,width,55,'currentColor',0,'stroke="var(--term-bg)" stroke-width=".5" data-terminal-area'));x+=width;});
- const names=['Technology','Financial Services','Technology','Financial Services','Technology','Financial Services','Financial Services','Technology'];
+ // Seven segments stretched to the 377px the strip already fills.
+ const widths=[122,80,44,35,27,19,19],sum=widths.reduce((total,w)=>total+w);
+ let b='',x=990;widths.forEach((w,i)=>{const width=w*377/sum;b+=wsCat(i,'Holding sector',wsRect(x,742,width,55,'currentColor',0,'stroke="var(--term-bg)" stroke-width=".5" data-terminal-area'));x+=width;});
+ const names=['Technology','Financial Services','Technology','Financial Services','Technology','Financial Services','Financial Services'];
  names.forEach((v,i)=>{const col=i%3,row=Math.floor(i/3),px=994+col*128,py=819+row*36;b+=wsCat(i,v,`<circle cx="${px}" cy="${py-5}" r="3" fill="currentColor"/>`)+wsText(px+7,py,v,10,{fill:'var(--term-muted)'})+wsText(px-4,py+17,i%2?'16.24%':'28.68%',12);});
  return wsCard('sector',983,702,393,242,'ETF Holding Distribution',b);
 }
@@ -4091,19 +4110,27 @@ function wsPortfolio(){
  wsPortfolios.forEach((name,i)=>{const y=1108+i*26;if(i%2)b+=wsRect(72,y-17,904,25,'var(--term-row)');b+=wsText(82,y,name,11.5)+wsSemantic(false,'Portfolio score',wsText(405,y,'86',11.5,{fill:'currentColor'}))+wsText(420,y,'/100',11.5);for(const [x,v] of [[508,'3.89'],[589,'72.88'],[671,'72.88'],[761,'72.88'],[849,'72.88'],[941,'8.95']])b+=wsText(x,y,v,11.5);});
  return wsCard('portfolios',71,994,906,365,'Popular Portfolios',b);
 }
-function wsPnl(){
- let b=wsText(990,1000,'Total Account Value',10.5,{fill:'var(--term-muted)'})+wsText(990,1017,'$51,996.13',12)+wsText(1146,1000,"Day’s P&L",10.5,{fill:'var(--term-muted)'})+wsSemantic(false,'Daily P&L',wsText(1146,1017,'+$467.89 (+0.13%)',12,{fill:'currentColor'}))+wsLine(990,1027,1766,1027);
+// The falling view mirrors the rising curve inside the same band, so it keeps its shape and stays on the chart.
+function pnlPoints(points,trend){
+ if(trend!=='down')return points;
+ const ys=points.map(p=>p[1]),top=Math.min(...ys),bottom=Math.max(...ys);
+ return points.map(([x,y])=>[x,top+bottom-y]);
+}
+function wsPnl(trend){
+ const down=trend==='down';
+ let b=wsText(990,1000,'Total Account Value',10.5,{fill:'var(--term-muted)'})+wsText(990,1017,'$51,996.13',12)+wsText(1146,1000,"Day’s P&L",10.5,{fill:'var(--term-muted)'})+wsSemantic(down,'Daily P&L',wsText(1146,1017,down?'-$467.89 (-0.13%)':'+$467.89 (+0.13%)',12,{fill:'currentColor'}))+wsLine(990,1027,1766,1027);
+ [['up','涨',1688],['down','跌',1724]].forEach(([id,label,x])=>b+=termButton(x,992,34,22,label,{active:trend===id,control:id,group:'workspace-pnl-trend',action:'pnl-trend'}));
  for(const [i,label] of ['Unsettled Funds ⓘ','Cash Balance','Available Funds','Available Funds','Risk Level ⓘ','Market Value','Max Buying Power','Open P&L'].entries()){
   const col=i<5?i:i-5,x=990+col*156,y=i<5?1045:1086;b+=wsText(x,y,label,10.5,{fill:'var(--term-muted)'});b+=i===4?wsSemantic(false,'Secure',wsText(x,y+17,'Secure',12,{fill:'currentColor'})):wsText(x,y+17,'$2,887.56',12);
  }
- const points=workspaceReference.light.lines.pnl;
- b+=wsSemantic(false,'P&L chart',`<defs><linearGradient id="workspace-pnl-gradient" x1="0" y1="0" x2="0" y2="1"><stop stop-color="currentColor" stop-opacity=".22"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs><path d="${wsPath(points)}L1710 1283L990 1283Z" fill="url(#workspace-pnl-gradient)" data-terminal-area/><path d="${wsPath(points)}" fill="none" stroke="currentColor" stroke-width="1.1" data-terminal-line data-terminal-width="1.1" data-workspace-green="pnl"/>`);
+ const points=pnlPoints(workspaceReference.light.lines.pnl,trend);
+ b+=wsSemantic(down,'P&L chart',`<defs><linearGradient id="workspace-pnl-gradient" x1="0" y1="0" x2="0" y2="1"><stop stop-color="currentColor" stop-opacity=".22"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs><path d="${wsPath(points)}L1710 1283L990 1283Z" fill="url(#workspace-pnl-gradient)" data-terminal-area/><path d="${wsPath(points)}" fill="none" stroke="currentColor" stroke-width="1.1" data-terminal-line data-terminal-width="1.1" data-workspace-green="pnl" data-workspace-trend="${trend}"/>`);
  ['6,126.00','6,126.00','6,126.00','6,126.00','6,126.00','6,126.00','6,126.00','6,126.00'].forEach((v,i)=>b+=wsText(1721,1136+i*22,v,11,{fill:'var(--term-muted)'}));
  b+=wsDates(Array.from({length:10},(_,i)=>1010+i*75),1307,Array(10).fill('09:20'));
  return wsCard('pnl',983,949,791,378,'P&L',b);
 }
-function renderWorkspaceTerminal(){
- return `<div class="terminal-scene workspace-terminal" role="group" aria-label="Terminal 工作区"><svg class="workspace-shell" viewBox="0 0 1781 1376" xmlns="http://www.w3.org/2000/svg" aria-label="Terminal 工具导航">${wsHeader()}</svg><main class="workspace-terminal-scroll" tabindex="0" aria-label="Terminal 工作区内容"><svg viewBox="63 37 1718 1339" class="workspace-terminal-content" xmlns="http://www.w3.org/2000/svg" aria-label="行情、持仓与组合工作区"><defs><pattern id="terminal-texture" width="8" height="8" patternUnits="userSpaceOnUse"/></defs>${wsTabs()+wsStock()+wsCalendar()+wsDonut()+wsCap()+wsNews()+wsYield()+wsRates()+wsSector()+wsBonds()+wsPortfolio()+wsPnl()+wsRect(71,1364,906,50,'var(--term-bg)',5)+wsHeading(71,1364,906,'ETF Holding Distribution')}</svg></main><svg class="workspace-account" viewBox="0 1295 63 81" aria-label="Terminal 账户">${wsRect(0,1295,63,81,'var(--ws-frame)')+wsAsset('gift',20,1299,22,21)+`<circle cx="31" cy="1348" r="14" fill="#3371FF"/>`+wsText(31,1353,'J',14,{fill:'#fff',anchor:'middle'})}</svg></div>`;
+function renderWorkspaceTerminal({pnlTrend='up'}={}){
+ return `<div class="terminal-scene workspace-terminal" role="group" aria-label="Terminal 工作区"><svg class="workspace-shell" viewBox="0 0 1781 1376" xmlns="http://www.w3.org/2000/svg" aria-label="Terminal 工具导航">${wsHeader()}</svg><main class="workspace-terminal-scroll" tabindex="0" aria-label="Terminal 工作区内容"><svg viewBox="63 37 1718 1339" class="workspace-terminal-content" xmlns="http://www.w3.org/2000/svg" aria-label="行情、持仓与组合工作区"><defs><pattern id="terminal-texture" width="8" height="8" patternUnits="userSpaceOnUse"/></defs>${wsTabs()+wsStock()+wsCalendar()+wsDonut()+wsCap()+wsNews()+wsYield()+wsRates()+wsSector()+wsBonds()+wsPortfolio()+wsPnl(pnlTrend)+wsRect(71,1364,906,50,'var(--term-bg)',5)+wsHeading(71,1364,906,'ETF Holding Distribution')}</svg></main><svg class="workspace-account" viewBox="0 1295 63 81" aria-label="Terminal 账户">${wsRect(0,1295,63,81,'var(--ws-frame)')+wsAsset('gift',20,1299,22,21)+`<circle cx="31" cy="1348" r="14" fill="#3371FF"/>`+wsText(31,1353,'J',14,{fill:'#fff',anchor:'middle'})}</svg></div>`;
 }
 function applyWorkspacePalette(element,palette,theme,globalStyle={}){
  applyTerminalPalette(element,palette,theme,globalStyle);
@@ -4114,7 +4141,7 @@ function applyWorkspacePalette(element,palette,theme,globalStyle={}){
  for(const [k,v] of Object.entries(vars))page.style.setProperty(k,v);
  const reference=workspaceReference[theme];for(const img of page.querySelectorAll('[data-workspace-asset]'))img.setAttribute('href',reference.assets[img.dataset.workspaceAsset]);
  for(const trace of page.querySelectorAll('[data-workspace-trace]')){const [id,i]=trace.dataset.workspaceTrace.split(':');trace.setAttribute('d',wsPath(reference.lines[id][i]));}
- for(const trace of page.querySelectorAll('[data-workspace-green]'))trace.setAttribute('d',wsPath(reference.lines[trace.dataset.workspaceGreen]));
+ for(const trace of page.querySelectorAll('[data-workspace-green]'))trace.setAttribute('d',wsPath(pnlPoints(reference.lines[trace.dataset.workspaceGreen],trace.dataset.workspaceTrend)));
 }
 
 
@@ -4133,7 +4160,7 @@ function applyWorkspacePalette(element,palette,theme,globalStyle={}){
 
 
 
-const VERSION = '0.20.0';
+const VERSION = '0.21.0';
 const STORAGE_KEY = 'ainvest-palette-lab:v1';
 const scenes = [
   { id: 'aime', name: 'Aime 对话', en: 'Aime conversation', icon: 'chat' },
@@ -4173,19 +4200,25 @@ const paths = {
 };
 const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.grid}</svg>`;
 const esc = text => String(text ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let state = { baseline: clone(presets[0]), draft: clone(presets[0]), scene: 'financial', theme: 'light', mode: 'draft', role: 'categorical', selected: 0, panel: 'palette', editorOpen: false, chartStyleOpen: false, editorModel: 'oklch', collapsed: innerWidth < 650, previewFullscreen: new URLSearchParams(location.search).get('preview') === 'fullscreen', saved: [], presetEdits: {}, globalChartStyle: normalizeGlobalChartStyle(), checkSettings: defaultCheckSettings(), financialBoard: defaultFinancialBoard(), financialDensity: 'compact', customTemplate:'all', comparisonBoards:{}, customBoard: defaultCompactBoard(), aimeBoard: defaultAimeBoard() };
+let state = { baseline: clone(presets[0]), draft: clone(presets[0]), scene: 'financial', theme: 'light', mode: 'draft', role: 'categorical', selected: 0, panel: 'palette', editorOpen: false, chartStyleOpen: false, editorModel: 'oklch', collapsed: innerWidth < 650, previewFullscreen: new URLSearchParams(location.search).get('preview') === 'fullscreen', saved: [], presetEdits: {}, pnlTrend: 'up', globalChartStyle: normalizeGlobalChartStyle(), checkSettings: defaultCheckSettings(), financialBoard: defaultFinancialBoard(), financialDensity: 'compact', customTemplate:'all', comparisonBoards:{}, customBoard: defaultCompactBoard(), aimeBoard: defaultAimeBoard() };
 let storageAvailable = true, loaded = false;
+function restoreStoredPresetEdits(input) {
+  const edits = restorePresetEdits(input, presets.map(p => p.id));
+  for (const palette of Object.values(edits)) dropRetiredBackgrounds(palette);
+  return edits;
+}
 try {
   const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
   if (stored?.schemaVersion === 1) {
     const base = validatePalette(stored.baseline), draft = validatePalette(stored.draft);
     base.id = stored.baseline.id; draft.id = stored.draft.id;
+    dropRetiredBackgrounds(base); dropRetiredBackgrounds(draft);
     // Update the unmodified old 8-color Ainvest preset to the newly confirmed 7 colors.
     for (const p of [base, draft]) if (p.id === 'ainvest') {
       for (const theme of ['light', 'dark']) if (p.themes[theme].categorical.length === 8 && p.themes[theme].categorical[7].hex === '#9EA9C7') p.themes[theme].categorical.pop();
       p.source = presets[0].source;
     }
-    state = { ...state, editorModel: stored.editorModel === 'hsb' ? 'hsb' : 'oklch', customTemplate: [...comparisonTemplates.map(t=>t.id),'free'].includes(stored.customTemplate)?stored.customTemplate:'all', comparisonBoards:validateComparisonBoards(stored.comparisonBoards), globalChartStyle: normalizeGlobalChartStyle(stored.globalChartStyle), checkSettings: normalizeCheckSettings(stored.checkSettings), financialBoard: validateFinancialBoard(stored.financialBoard), financialDensity: stored.financialDensity === 'standard' ? 'standard' : 'compact', customBoard: validateCompactBoard(stored.customBoard), aimeBoard: validateAimeBoard(stored.aimeBoard), baseline: base, draft, scene: scenes.some(s => s.id === stored.scene) ? stored.scene : 'financial', collapsed: typeof stored.collapsed === 'boolean' ? stored.collapsed : state.collapsed, theme: ['light', 'dark'].includes(stored.theme) ? stored.theme : 'light', saved: (stored.saved || []).slice(-30).flatMap(p => { try { const v = validatePalette(p); v.id = p.id; return [v]; } catch { return []; } }), presetEdits: restorePresetEdits(stored.presetEdits, presets.map(p => p.id)) };
+    state = { ...state, editorModel: stored.editorModel === 'hsb' ? 'hsb' : 'oklch', customTemplate: [...comparisonTemplates.map(t=>t.id),'free'].includes(stored.customTemplate)?stored.customTemplate:'all', comparisonBoards:validateComparisonBoards(stored.comparisonBoards), globalChartStyle: normalizeGlobalChartStyle(stored.globalChartStyle), checkSettings: normalizeCheckSettings(stored.checkSettings), financialBoard: validateFinancialBoard(stored.financialBoard), financialDensity: stored.financialDensity === 'standard' ? 'standard' : 'compact', customBoard: validateCompactBoard(stored.customBoard), aimeBoard: validateAimeBoard(stored.aimeBoard), baseline: base, draft, scene: scenes.some(s => s.id === stored.scene) ? stored.scene : 'financial', collapsed: typeof stored.collapsed === 'boolean' ? stored.collapsed : state.collapsed, theme: ['light', 'dark'].includes(stored.theme) ? stored.theme : 'light', saved: (stored.saved || []).slice(-30).flatMap(p => { try { const v = validatePalette(p); v.id = p.id; return [v]; } catch { return []; } }), presetEdits: restoreStoredPresetEdits(stored.presetEdits) };
     loaded = true;
   }
 } catch { storageAvailable = false; }
@@ -4210,7 +4243,7 @@ let mobileShareError = '', sharedPreviewLoaded = false;
 try {
   const shared = decodeMobilePreview(location.hash);
   if (shared) {
-    const baseline = restorePalette(shared.baseline, presets), draft = restorePalette(shared.draft, presets);
+    const baseline = dropRetiredBackgrounds(restorePalette(shared.baseline, presets)), draft = dropRetiredBackgrounds(restorePalette(shared.draft, presets));
     const aimeBoard = validateAimeBoard(shared.aimeBoard);
     state = { ...state, baseline, draft, aimeBoard, scene: 'aime', theme: shared.theme === 'dark' ? 'dark' : 'light', mode: shared.mode === 'baseline' ? 'baseline' : 'draft', globalChartStyle: normalizeGlobalChartStyle(shared.globalChartStyle) };
     sharedPreviewLoaded = true;
@@ -4243,9 +4276,9 @@ function snapshotLayouts(snapshot) {
   return layouts;
 }
 function applyLiveSnapshot(snapshot) {
-  const baseline = restorePalette(snapshot.baseline, presets), draft = restorePalette(snapshot.draft, presets), aimeBoard = validateAimeBoard(snapshot.aimeBoard);
+  const baseline = dropRetiredBackgrounds(restorePalette(snapshot.baseline, presets)), draft = dropRetiredBackgrounds(restorePalette(snapshot.draft, presets)), aimeBoard = validateAimeBoard(snapshot.aimeBoard);
   live.sharedPalettes = restoreSavedPalettes(snapshot.saved);
-  live.sharedPresetEdits = restorePresetEdits(snapshot.presetEdits, presets.map(p => p.id));
+  live.sharedPresetEdits = restoreStoredPresetEdits(snapshot.presetEdits);
   state = { ...state, ...snapshotLayouts(snapshot), baseline, draft, aimeBoard, scene: viewerSceneNow(), theme: snapshot.theme === 'dark' ? 'dark' : 'light', mode: snapshot.mode === 'baseline' ? 'baseline' : 'draft', globalChartStyle: normalizeGlobalChartStyle(snapshot.globalChartStyle), editorOpen: false };
   refreshUneditedPreset();
 }
@@ -4454,7 +4487,7 @@ function render() {
   loadLazyScene(state.scene);
   const scroll = document.querySelector('.side-scroll')?.scrollTop || 0;
   const paletteTabsScroll = document.querySelector('.palette-tabs')?.scrollTop || 0;
-  const viewerPalettesScroll = document.querySelector('.aime-viewer-palettes')?.scrollLeft || 0;
+  const viewerRowScroll = document.querySelector('.aime-mobile .aime-quick-actions')?.scrollLeft || 0;
   const oldCanvas = document.querySelector('#preview-canvas');
   const oldSceneScroller = oldCanvas?.querySelector('.financial-content-frame, .terminal-content-frame, .workspace-terminal-scroll, .compact-board-scroll, .aime-content-scroll') || oldCanvas;
   const canvasScroll = { top: oldCanvas?.dataset.scene===state.scene ? oldSceneScroller?.scrollTop || 0 : 0, left: oldSceneScroller?.scrollLeft || 0, sceneHeight: oldSceneScroller?.scrollHeight || 0 };
@@ -4466,13 +4499,13 @@ function render() {
   app.innerHTML = `<main class="app-shell two-pane ${mobileAime ? 'aime-mobile' : ''} ${readOnly ? 'live-viewer' : ''} ${isDesktopViewer() ? 'desktop-viewer' : ''} ${readOnly && !live.ready ? 'live-unavailable' : ''} ${state.collapsed ? 'panel-collapsed' : ''} ${state.previewFullscreen ? 'preview-fullscreen' : ''}">
     ${state.previewFullscreen ? `<button class="button fullscreen-exit" data-action="exit-fullscreen" aria-label="退出全屏预览">${icon('close')}退出全屏 <kbd>Esc</kbd></button>` : ''}
     ${state.collapsed && !state.previewFullscreen && !mobileAime ? `<button class="icon-button workbench-launcher" data-action="${readOnly ? 'viewer-collapse' : 'collapse'}" aria-label="${readOnly ? '展开工具栏' : '展开颜色工作台'}" title="${readOnly ? '展开工具栏' : '展开颜色工作台'}" aria-expanded="false">${icon('panel')}</button>` : ''}
-    ${mobileAime ? `<nav class="aime-preview-controls" aria-label="手机预览工具">${readOnly ? `${live.id ? liveDot() : ''}${live.ready ? viewerPaletteBar() : '<div class="aime-viewer-palettes"></div>'}` : '<span>Aime 预览</span>'}<button data-action="theme" data-value="${state.theme==='light'?'dark':'light'}" aria-label="切换到${state.theme==='light'?'深色':'浅色'}主题" ${readOnly&&!live.ready?'disabled':''}>${icon(state.theme==='light'?'moon':'sun')}</button>${readOnly ? '' : `<button data-action="share-mobile">分享</button><button data-action="collapse" aria-expanded="${!state.collapsed}" aria-controls="color-workbench">调色</button>`}</nav>` : ''}
+    ${mobileAime && !readOnly ? `<nav class="aime-preview-controls" aria-label="手机预览工具"><span>Aime 预览</span><button data-action="share-mobile">分享</button><button data-action="collapse" aria-expanded="${!state.collapsed}" aria-controls="color-workbench">调色</button></nav>` : ''}
     ${live.role ? `<div class="live-sync-bar" ${liveBarHidden()?'hidden':''}><span class="live-sync-status" role="status">${esc(live.status)}</span>${live.error||live.conflict?'<button data-action="live-reload">重新载入</button>':''}${live.role==='owner'?'<button data-action="live-copy">复制为新方案</button>':''}</div>` : ''}
     <div class="workspace">
       ${readOnly && !live.ready ? `<div class="live-viewer-notice"><p>${esc(live.error || '正在载入共享方案…')}</p>${live.error?'<button class="button" data-action="live-reload">重试</button>':''}</div>` : ''}
       ${mobileAime && !state.collapsed ? '<button class="aime-workbench-backdrop" data-action="collapse" aria-label="关闭颜色工作台"></button>' : ''}
       <section class="preview-workspace" aria-label="场景预览工作区">
-        <div class="preview-canvas ${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? 'has-scene' : ''}" id="preview-canvas" role="region" aria-label="${scene.name}${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? '，图表预览' : '，内容待添加'}" style="--canvas-bg:${palette.themes[state.theme].surface[0].hex}" data-scene="${state.scene}" data-theme="${state.theme}">${state.scene === 'financial' ? renderFinancialScene(renderFinancialExtras(state.financialBoard)) : state.scene === 'custom' ? renderCompactBoard(activeCustomBoard(),state.customTemplate==='free'?{}:{title:comparisonTemplates.find(t=>t.id===state.customTemplate).name,description:`全部 ${compactTypes.length} 种图表 · 每种少量 / 大量数据对比`}) : state.scene === 'aime' ? renderAimeScene(state.aimeBoard,state.theme) : state.scene === 'terminal' ? (lazyScenes.terminal.module?.renderTerminalScene() ?? lazySceneHolder('terminal')) : state.scene === 'workspace' ? (lazyScenes.workspace.module?.renderWorkspaceTerminal() ?? lazySceneHolder('workspace')) : ''}</div>
+        <div class="preview-canvas ${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? 'has-scene' : ''}" id="preview-canvas" role="region" aria-label="${scene.name}${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? '，图表预览' : '，内容待添加'}" style="--canvas-bg:${palette.themes[state.theme].surface[0].hex}" data-scene="${state.scene}" data-theme="${state.theme}">${state.scene === 'financial' ? renderFinancialScene(renderFinancialExtras(state.financialBoard)) : state.scene === 'custom' ? renderCompactBoard(activeCustomBoard(),state.customTemplate==='free'?{}:{title:comparisonTemplates.find(t=>t.id===state.customTemplate).name,description:`全部 ${compactTypes.length} 种图表 · 每种少量 / 大量数据对比`}) : state.scene === 'aime' ? renderAimeScene(state.aimeBoard,state.theme,{themeSwitch:mobileAime?{disabled:readOnly&&!live.ready,status:readOnly&&live.id?liveDot():'',palettes:readOnly&&live.ready?viewerPaletteBar():''}:null}) : state.scene === 'terminal' ? (lazyScenes.terminal.module?.renderTerminalScene() ?? lazySceneHolder('terminal')) : state.scene === 'workspace' ? (lazyScenes.workspace.module?.renderWorkspaceTerminal({pnlTrend:state.pnlTrend}) ?? lazySceneHolder('workspace')) : ''}</div>
       </section>
       ${isDesktopViewer() ? viewerToolbar() : `<aside class="sidebar" id="color-workbench" aria-label="颜色操作面板" ${readOnly?'inert':''}>
         <div class="sidebar-header">
@@ -4493,14 +4526,15 @@ function render() {
   document.querySelector('.side-scroll').scrollTop = scroll;
   const tabStrip = document.querySelector('.palette-tabs'), activeTab = tabStrip.querySelector('[aria-selected="true"]')?.closest('.palette-tab-item');
   tabStrip.scrollTop = paletteTabsScroll;
-  const viewerPalettes = document.querySelector('.aime-viewer-palettes');
-  if (viewerPalettes) {
-    viewerPalettes.scrollLeft = viewerPalettesScroll;
-    const chip = viewerPalettes.querySelector('.active');
+  const viewerRow = document.querySelector('.aime-mobile .aime-quick-actions');
+  if (viewerRow) {
+    viewerRow.scrollLeft = viewerRowScroll;
+    // Keep the chosen palette clear of the theme button, which stays pinned at the left of the row.
+    const chip = viewerRow.querySelector('.aime-viewer-palettes .active');
     if (chip) {
-      const end = chip.offsetLeft + chip.offsetWidth - viewerPalettes.clientWidth;
-      if (viewerPalettes.scrollLeft > chip.offsetLeft) viewerPalettes.scrollLeft = chip.offsetLeft;
-      else if (viewerPalettes.scrollLeft < end) viewerPalettes.scrollLeft = end;
+      const box = chip.getBoundingClientRect(), row = viewerRow.getBoundingClientRect(), pinned = viewerRow.querySelector('.aime-row-pinned').getBoundingClientRect().right;
+      if (box.left < pinned) viewerRow.scrollLeft -= pinned - box.left + 6;
+      else if (box.right > row.right) viewerRow.scrollLeft += box.right - row.right;
     }
   }
   if (activeTab && (activeTab.offsetTop < tabStrip.scrollTop || activeTab.offsetTop + activeTab.offsetHeight > tabStrip.scrollTop + tabStrip.clientHeight)) tabStrip.scrollTop = activeTab.offsetTop - 3;
@@ -4559,7 +4593,7 @@ function palettePanel() {
   state.selected = Math.min(state.selected, colors.length - 1);
   const color = colors[state.selected], base = shownPalette(state.baseline).themes[state.theme][state.role][state.selected], hsv = hexToHsv(color.hex), readonly = state.mode === 'baseline', editable = seriesRoles.includes(state.role) && !readonly, hsb = state.editorModel === 'hsb';
   return `<section class="panel-section"><div class="section-heading"><span class="section-label">Palette / 当前色板</span><button class="text-button" data-action="reset" ${!changedCount() ? 'disabled' : ''}>恢复原始</button></div><div class="active-palette-name">${esc(p.name)}</div><div class="preset-source">${esc(p.source)}</div>${!p.availableThemes.includes(state.theme) ? '<div class="theme-warning">当前主题为实验复用色值，未经竞品来源确认。</div>' : ''}<div class="reference-caption">${icon('lock')}A 为冻结基线，B 为当前调整</div></section>
-    <section class="panel-section"><div class="section-heading"><span class="section-label">Colors / 颜色角色</span><span class="mono muted" style="font-size:9px">${state.theme === 'light' ? 'LIGHT' : 'DARK'}</span></div><div class="role-tabs" aria-label="颜色角色">${Object.entries(roles).map(([id, name]) => `<button class="${state.role === id ? 'active' : ''}" data-action="role" data-value="${id}" aria-pressed="${state.role === id}">${name}<small>${p.themes[state.theme][id].length}</small></button>`).join('')}</div><div class="color-list">${colors.map((c, i) => `<div class="color-item">${editable && colors.length > 1 ? `<button class="color-drag" data-color-drag="${i}" aria-label="调整「${esc(c.name)}」的顺序，可拖动或按上下方向键" title="拖动调整顺序">${icon('grip')}</button>` : ''}<button class="color-row ${state.editorOpen && state.selected === i ? 'selected' : ''}" data-action="color" data-value="${i}" aria-label="${esc(c.name)} ${c.hex}" aria-pressed="${state.editorOpen && state.selected === i}" aria-expanded="${state.editorOpen && state.selected === i}"><span class="color-index mono">${String(i + 1).padStart(2, '0')}</span><i class="swatch" style="background:${c.hex}" data-swatch="${i}"></i><span class="color-description"><span class="color-main"><span class="color-name">${esc(c.name)}</span><span class="color-value mono" data-color-value="${i}">${c.hex}</span></span><span class="color-oklch mono" data-oklch="${i}">${compactOklch(c.hex)}</span><span class="color-check-badges" data-color-checks="${i}">${renderColorCheckBadges(report.entries[i],report)}</span></span>${state.mode === 'draft' && c.hex !== state.baseline.themes[state.theme][state.role][i]?.hex ? '<i class="changed-dot"></i>' : ''}${state.editorOpen && state.selected === i ? icon('sliders') : ''}</button>${editable && colors.length > 1 ? `<button class="color-remove" data-action="color-remove" data-value="${i}" aria-label="删除「${esc(c.name)}」" title="删除颜色">${icon('close')}</button>` : ''}</div>`).join('')}</div>${editable && colors.length < 64 ? '<button class="text-button color-add" data-action="color-add">＋ 添加颜色</button>' : ''}<div class="colors-note">${icon('info')}${state.role === 'line' ? '只用于折柱图里的折线，柱子用分类色；顺序和增删同时作用于浅色、深色' : state.role === 'categorical' ? '顺序和增删同时作用于浅色、深色；色值分主题修改' : '仅修改当前角色，其他用途保持独立'}</div></section>
+    <section class="panel-section"><div class="section-heading"><span class="section-label">Colors / 颜色角色</span><span class="mono muted" style="font-size:9px">${state.theme === 'light' ? 'LIGHT' : 'DARK'}</span></div><div class="role-tabs" aria-label="颜色角色">${Object.entries(roles).map(([id, name]) => `<button class="${state.role === id ? 'active' : ''}" data-action="role" data-value="${id}" aria-pressed="${state.role === id}">${name}<small>${p.themes[state.theme][id].length}</small></button>`).join('')}</div><div class="color-list">${colors.map((c, i) => `<div class="color-item">${editable && colors.length > 1 ? `<button class="color-drag" data-color-drag="${i}" aria-label="调整「${esc(c.name)}」的顺序，可拖动或按上下方向键" title="拖动调整顺序">${icon('grip')}</button>` : ''}<button class="color-row ${state.editorOpen && state.selected === i ? 'selected' : ''}" data-action="color" data-value="${i}" aria-label="${esc(c.name)} ${c.hex}" aria-pressed="${state.editorOpen && state.selected === i}" aria-expanded="${state.editorOpen && state.selected === i}"><span class="color-index mono">${String(i + 1).padStart(2, '0')}</span><i class="swatch" style="background:${c.hex}" data-swatch="${i}"></i><span class="color-description"><span class="color-main"><span class="color-name">${esc(c.name)}</span><span class="color-value mono" data-color-value="${i}">${c.hex}</span></span><span class="color-oklch mono" data-oklch="${i}">${compactOklch(c.hex)}</span></span>${state.mode === 'draft' && c.hex !== state.baseline.themes[state.theme][state.role][i]?.hex ? '<i class="changed-dot"></i>' : ''}${state.editorOpen && state.selected === i ? icon('sliders') : ''}</button>${editable && colors.length > 1 ? `<button class="color-remove" data-action="color-remove" data-value="${i}" aria-label="删除「${esc(c.name)}」" title="删除颜色">${icon('close')}</button>` : ''}</div>`).join('')}</div>${editable && colors.length < 64 ? '<button class="text-button color-add" data-action="color-add">＋ 添加颜色</button>' : ''}<div class="colors-note">${icon('info')}${state.role === 'line' ? '只用于折柱图里的折线，柱子用分类色；顺序和增删同时作用于浅色、深色' : state.role === 'categorical' ? '顺序和增删同时作用于浅色、深色；色值分主题修改' : '仅修改当前角色，其他用途保持独立'}</div></section>
     ${state.editorOpen ? `<section class="panel-section color-editor"><div class="editor-heading"><span class="editor-name"><span>编辑</span>${esc(color.name)}</span><div class="editor-tools"><div class="segment editor-model" aria-label="调色模式">${[['oklch', 'OKLCH'], ['hsb', 'HSB']].map(([id, name]) => `<button data-action="editor-model" data-value="${id}" class="${state.editorModel === id ? 'active' : ''}" aria-pressed="${state.editorModel === id}">${name}</button>`).join('')}</div>${editable && colors.length > 1 ? `<button class="icon-button" data-action="color-remove" data-value="${state.selected}" aria-label="删除此颜色" title="删除此颜色">${icon('trash')}</button>` : ''}<button class="icon-button" data-action="editor-close" aria-label="收起颜色编辑器">${icon('close')}</button></div></div><div class="color-inputs"><label class="picker-wrap" style="background:${color.hex}" title="打开颜色选择器"><input type="color" id="native-color" value="${color.hex}" aria-label="${esc(color.name)}颜色选择器" ${readonly ? 'disabled' : ''}></label><label class="hex-field"><span>HEX</span><input class="mono" id="hex-input" value="${color.hex}" maxlength="64" aria-label="色值，支持 HEX、RGB、HSL" spellcheck="false" ${readonly ? 'disabled' : ''}></label><button class="icon-button" data-action="copy-color" title="复制色值" aria-label="复制色值">${icon('copy')}</button></div><div class="colorjs-picker-shell" ${hsb ? '' : 'data-colorjs-picker'}>${hsb ? '' : `<color-picker space="oklch" color="${color.hex}" gamut="none" aria-label="OKLCH 颜色选择器"><span slot="color-space" class="picker-space-name">OKLCH</span></color-picker>`}<div class="hsb-fallback">${['H 色相', 'S 饱和', 'B 亮度'].map((label, i) => `<div class="slider-row"><label for="slider-${i}" title="${label}">${label[0]}</label><input id="slider-${i}" data-hsv="${i}" type="range" min="0" max="${i === 0 ? 359 : 100}" step="1" value="${Math.round(hsv[i])}" aria-label="${label}" ${readonly ? 'disabled' : ''} style="background:${i === 0 ? 'linear-gradient(to right,#ff7777,#dddd55,#55cc88,#55cddd,#7777ee,#dd77dd,#ff7777)' : i === 1 ? `linear-gradient(to right,#ddd,${hsvToHex(hsv[0], 100, 100)})` : `linear-gradient(to right,#222,${hsvToHex(hsv[0], hsv[1], 100)})`}"><span class="hsv-number mono"><input id="output-${i}" data-hsv-number="${i}" type="number" min="0" max="${i === 0 ? 359 : 100}" step="1" value="${Math.round(hsv[i])}" aria-label="${label}数值" ${readonly ? 'disabled' : ''}><span aria-hidden="true">${i === 0 ? '°' : '%'}</span></span></div>`).join('')}</div>${hsb ? '' : '<p class="picker-status" data-picker-status role="status">正在加载 Color.js 选色器…</p>'}</div><div class="oklch-readout" id="oklch-readout">${oklchDetails(color.hex)}<div class="color-check-badges" data-color-checks="${state.selected}">${renderColorCheckBadges(report.entries[state.selected],report)}</div></div><div class="mini-diff"><i style="background:${base?.hex || '#FFFFFF'}"></i><span class="mono">${base?.hex || '新增'}</span>${icon('arrow')}<i id="after-swatch" style="background:${color.hex}"></i><span id="after-hex" class="mono">${color.hex}</span></div><div class="editor-footnote">修改应用于${state.theme === 'light' ? '浅色' : '深色'}主题的「${roles[state.role]}」。<br>RGB <span class="mono" id="rgb-value">${rgbText(color.hex)}</span></div></section>` : ''}`;
 }
 let importText = '', importError = '', importInputMode = 'text', importLightText = '', importDarkText = '', importName = '';
@@ -4806,6 +4840,8 @@ function copyLiveSession() {
 app.addEventListener('toggle', e => { if (e.target.matches?.('.chart-style-panel')) state.chartStyleOpen = e.target.open; }, true);
 app.addEventListener('click', async e => {
   const liveAction = e.target.closest('[data-action]')?.dataset.action;
+  // A preview switch rather than an edit, so viewers can use it too.
+  if (liveAction === 'pnl-trend') { state.pnlTrend = e.target.closest('[data-action]').dataset.value === 'down' ? 'down' : 'up'; render(); return; }
   if (liveAction === 'live-reload') { await connectLive(); return; }
   if (liveAction === 'live-copy') { copyLiveSession(); return; }
   if (liveAction === 'theme' && live.role === 'viewer' && live.ready) {

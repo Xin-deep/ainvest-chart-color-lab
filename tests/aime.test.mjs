@@ -11,14 +11,11 @@ runInNewContext(await readFile(new URL('../dist/vendor/vis-lab.bundle.js',import
 globalThis.PaletteVisEngine=context.PaletteVisEngine;
 const {defaultAimeBoard,validateAimeBoard,renderAimeScene,aimeBoardPanel,aimeHeaderKind,applyAimePalette,aimeShownPalette}=await import('../dist/scenes/aime.js');
 const {defaultCompactBoard,newCompactModule}=await import('../dist/scenes/custom.js');
-test('Aime background follows the preset override until the page background is edited',()=>{
- const background=(palette,theme)=>{const props={};applyAimePalette({querySelector:()=>({style:{setProperty:(k,v)=>{props[k]=v;},removeProperty:k=>{delete props[k];}}})},palette,theme);return props['--aime-bg'];};
+test('every preset shows the original Aime page and card colors until they are edited',()=>{
  const byId=Object.fromEntries(presets.map(p=>[p.id,structuredClone(p)]));
- assert.equal(background(byId.claude,'light'),'#FFFFFF');assert.equal(background(byId.claude,'dark'),'#191919');
- assert.equal(background(byId['robinhood-brand'],'light'),'#FFFFFF');assert.equal(background(byId['robinhood-brand'],'dark'),'#000000');
- assert.equal(background(byId.tradingview,'light'),'#F5F5F5');assert.equal(background(byId['simply-wall-st'],'dark'),'#1A1A1A');
- assert.equal(background(byId.ainvest,'dark'),'#141414');assert.equal(background(byId.ainvest,'light'),'#FFFFFF');
- byId.claude.themes.light.surface[0].hex='#ABCDEF';assert.equal(background(byId.claude,'light'),'#ABCDEF');
+ const shown=(id,theme,i)=>aimeShownPalette(byId[id],theme).themes[theme].surface[i].hex;
+ for(const id of Object.keys(byId))for(const [theme,hex] of [['light','#FFFFFF'],['dark','#141414']])for(const i of [0,1])assert.equal(shown(id,theme,i),hex,id+theme+i);
+ byId.claude.themes.light.surface[0].hex='#ABCDEF';assert.equal(shown('claude','light',0),'#ABCDEF');
 });
 test('the console reads the colors Aime shows without changing the palette',()=>{
  const ainvest=structuredClone(presets.find(p=>p.id==='ainvest')),stored=JSON.stringify(ainvest);
@@ -70,4 +67,14 @@ test('chart headers show a pager or three actions, and the choice survives valid
  assert.equal(validateAimeBoard({...board,modules:[{...board.modules[0],header:'bad'}]}).modules[0].header,undefined);
  restored.selected=restored.modules[1].id;
  assert.match(aimeBoardPanel(restored),/data-module-field="header"[\s\S]*value="actions" selected/);
+});
+
+test('phones only have theme and palette controls above the input, computers keep the quick actions',()=>{
+ const board=defaultAimeBoard();
+ const phone=renderAimeScene(board,'light',{themeSwitch:{disabled:false}}),computer=renderAimeScene(board,'light');
+ assert.match(phone,/aime-theme-switch" data-action="theme" data-value="dark"/);assert.doesNotMatch(phone,/Fast|Price Forecast|Circle Analysis/);
+ assert.doesNotMatch(computer,/aime-theme-switch/);assert.match(computer,/Fast/);assert.match(computer,/Price Forecast/);assert.match(computer,/Circle Analysis/);
+ assert.match(renderAimeScene(board,'dark',{themeSwitch:{disabled:true}}),/data-value="light"[^>]*disabled/);
+ const withPalettes=renderAimeScene(board,'light',{themeSwitch:{status:'<span class="live-dot"></span>',palettes:'<div class="aime-viewer-palettes"></div>'}});
+ assert.ok(withPalettes.indexOf('live-dot')<withPalettes.indexOf('aime-theme-switch')&&withPalettes.indexOf('aime-theme-switch')<withPalettes.indexOf('aime-viewer-palettes'));
 });
