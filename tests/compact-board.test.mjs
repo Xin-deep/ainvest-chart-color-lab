@@ -139,3 +139,10 @@ test('fixed Sankey and waterfall comparison pairs use different valid data volum
    if(incoming&&outgoing)assert.equal(incoming,outgoing);
  }
 });
+
+test('only charts with a line and no stack offer the main line area',()=>{
+ const areaIds=compactTypes.filter(t=>t.area).map(t=>t.id);
+ for(const id of ['line','line-negative','line-multi','combo','combo-single'])assert.ok(areaIds.includes(id),id);
+ for(const id of ['line-stack','bar','donut'])assert.ok(!areaIds.includes(id),id);
+ assert.equal(validateCompactBoard({...defaultCompactBoard(),modules:[{type:'line',area:'bogus'}]}).modules[0].area,undefined);
+});

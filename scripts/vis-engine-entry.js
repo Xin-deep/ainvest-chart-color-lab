@@ -14,7 +14,7 @@ const compactCatalog=examplesFor('index').map(e=>{
   const caps=capabilitiesOf(e),range=densityRangeOf(e);
   if(e.id==='treemap-entry')range.max=8;
   if(e.chart==='pie')range.max=12;
-  return {id:e.id,name:e.title,group:e.group,chart:e.chart,count:defaultDensityCountOf(e),legacyCounts:e.chart==='cartesian'?[22,e.id==='grouped3'?16:e.id==='line-multi'?36:22]:e.chart==='pie'?[7]:[densityOptionsOf(e).many],series:e.indexSeriesRange?.default||1,seriesRange:e.indexSeriesRange||null,range,labels:!!(caps.dataLabel||caps.labelLayout),fixed:!caps.density,summary:e.summary||'',height:'auto',span:e.chart==='sankey'?'full':'auto'};
+  return {id:e.id,name:e.title,group:e.group,chart:e.chart,count:defaultDensityCountOf(e),legacyCounts:e.chart==='cartesian'?[22,e.id==='grouped3'?16:e.id==='line-multi'?36:22]:e.chart==='pie'?[7]:[densityOptionsOf(e).many],series:e.indexSeriesRange?.default||1,seriesRange:e.indexSeriesRange||null,area:caps.area,range,labels:!!(caps.dataLabel||caps.labelLayout),fixed:!caps.density,summary:e.summary||'',height:'auto',span:e.chart==='sankey'?'full':'auto'};
 });
 let sharedSheet;
 function mountCompactChart(target,module,palette,mode,onColor,density='compact',platform='pc') {
@@ -52,7 +52,7 @@ function mountCompactChart(target,module,palette,mode,onColor,density='compact',
   // Use the upstream presentation pipeline, including its Ainvest English copy.
   const sourceCfg=example.cfg;
   const selected={...example,cfg:n=>sourceCfg(n,module.series)};
-  let cfg=buildConfig(selected,{theme:'ainvest',platform:platform==='mobile'?'mobile':'pc',density:module.count,dataLabel:module.labels,animation:false,legend:example.chart==='pie'&&module.labels==='on'?'bottom':'right',labelLayout:example.chart==='pie'&&module.labels==='on'?'outside':'off',legendSelect:'multi',radarEditable:'off'});
+  let cfg=buildConfig(selected,{theme:'ainvest',platform:platform==='mobile'?'mobile':'pc',density:module.count,area:module.area==='on',dataLabel:module.labels,animation:false,legend:example.chart==='pie'&&module.labels==='on'?'bottom':'right',labelLayout:example.chart==='pie'&&module.labels==='on'?'outside':'off',legendSelect:'multi',radarEditable:'off'});
   cfg=applyComparisonFixture(cfg,module);
   const fixture=financialChartConfig(module)||aimeChartConfig(module);if(fixture)Object.assign(cfg,fixture);
   cfg=completePiePreview(cfg,module);

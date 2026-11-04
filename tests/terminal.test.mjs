@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {renderTerminalScene,terminalPaletteStyle,applyTerminalPalette,terminalStockRows,TERMINAL_SIZE} from '../dist/scenes/terminal.js';
+import {renderTerminalScene,terminalPaletteStyle,applyTerminalPalette,terminalStockRows,TERMINAL_SIZE,yieldBars,risingCurve} from '../dist/scenes/terminal.js';
 import {terminalDarkReference} from '../dist/data/terminal-dark-reference.js';
 import {terminalReference} from '../dist/data/terminal-reference.js';
 import {presets} from '../dist/data/presets.js';
@@ -57,7 +57,7 @@ test('dark theme uses reference surfaces and identity assets while series follow
   marks.forEach((m,i)=>assert.equal(m.style.color,palette.themes[theme].categorical[i%7].hex));
   const reference=theme==='dark'?terminalDarkReference:terminalReference;
   assert.equal(asset.href,reference.assets['new-chat']);
-  assert.equal(trace.d,'M'+reference.lines.bonds[0].points.map(p=>p.join(' ')).join('L'));
+  assert.equal(trace.d,'M'+risingCurve(reference.lines.bonds[0].points,222,154).map(p=>p.join(' ')).join('L'));
  }
  palette.themes.dark.categorical.push({name:'Series 8',hex:'#8899AA'});
  applyTerminalPalette(host,palette,'dark');assert.equal(marks[7].style.color,'#8899AA');assert.equal(marks[7].dataset.colorIndex,'7');
@@ -67,7 +67,7 @@ test('dark theme uses reference surfaces and identity assets while series follow
  const html=renderTerminalScene();
  for(const id of ['major-bonds-trend','crypto-market-cap','crypto-etf-flow','global-yield-curves','key-interest-rates'])assert.ok(html.includes('data-terminal-chart="'+id+'"'),id);
  // Line points and their legend dots must address the same palette slots.
- assert.match(html,/data-color-index="2"[^>]+data-terminal-base="#9EA9C7"/);
+ assert.match(html,/data-color-index="2"[^>]+data-terminal-base="[^"]+"[^>]+aria-label="rates 3/);
  assert.equal(html.match(/data-color-role="line" data-color-index="0"[^>]+data-terminal-base="#E57E17"/g).length,7);
 });
 
@@ -90,4 +90,36 @@ test('only the yield combination uses the line palette, in its legend, line and 
  assert.equal(marks.filter(label=>label.startsWith('Factory3')).length,6);
  assert.equal(marks.filter(label=>label.startsWith('yield')).length,1);
  assert.equal(marks.length,7);
+});
+
+test('every yield period has two whole bars with the first series taller',()=>{
+ const bars=yieldBars(terminalReference.bars.yield);
+ assert.equal(bars.length,10);
+ for(let i=0;i<bars.length;i+=2){
+  assert.equal(bars[i].base,'#1F5FD6');assert.equal(bars[i+1].base,'#168CB8');
+  assert.ok(bars[i].height>bars[i+1].height);
+  assert.ok(Math.abs(bars[i].y+bars[i].height-(bars[i+1].y+bars[i+1].height))<.01);
+ }
+});
+test('the bonds card is one line with an area that follows the theme curve',()=>{
+ const html=renderTerminalScene(),card=html.slice(html.indexOf('Major 10-year bonds'),html.indexOf('data-terminal-chart="crypto-market-cap"'));
+ assert.equal((card.match(/data-terminal-trace="bonds:/g)||[]).length,1);
+ assert.equal((card.match(/data-terminal-area-trace="bonds:0"/g)||[]).length,1);
+ assert.doesNotMatch(card,/Factory2/);
+ const area={dataset:{terminalAreaTrace:'bonds:0',terminalBaseline:'232'},setAttribute(name,value){this[name]=value;}};
+ applyTerminalPalette({style:{setProperty(){}},querySelector:()=>null,querySelectorAll:s=>s==='[data-terminal-area-trace]'?[area]:[]},presets[0],'dark');
+ const points=risingCurve(terminalDarkReference.lines.bonds[0].points,222,154);
+ assert.ok(area.d.startsWith('M'+points[0].join(' ')));assert.ok(area.d.endsWith('L'+points[0][0]+' 232Z'));
+});
+
+test('the bonds curve climbs clearly and stays inside its grid in both themes',()=>{
+ for(const reference of [terminalReference,terminalDarkReference]){
+  const points=risingCurve(reference.lines.bonds[0].points,222,154),ys=points.map(p=>p[1]),third=Math.floor(ys.length/3);
+  const mean=list=>list.reduce((sum,v)=>sum+v,0)/list.length;
+  assert.ok(Math.min(...ys)>=144&&Math.max(...ys)<=232);
+  // SVG y grows downward, so a larger value sits higher up on the page.
+  assert.ok(mean(ys.slice(0,third))-mean(ys.slice(-third))>30);
+  assert.ok(ys[0]-ys.at(-1)>50);
+  assert.deepEqual(points.map(p=>p[0]),reference.lines.bonds[0].points.map(p=>p[0]));
+ }
 });

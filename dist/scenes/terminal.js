@@ -85,11 +85,32 @@ const termComboLine=(base,label,content)=>termMark('line',0,base,label,content);
 function termTraceSet(id){
  return terminalReference.lines[id].map(({base,points},i)=>(id==='yield'?termComboLine:termCat.bind(null,i))(base,`${id} ${i+1}`,`<path d="M${points.map(p=>p.join(' ')).join('L')}" fill="none" stroke="currentColor" stroke-width="1.25" data-terminal-trace="${id}:${i}" data-terminal-line data-terminal-width="1.25"/>`)).join('');
 }
-function termBarSet(id){
- return terminalReference.bars[id].map(({base,x,y,width,height})=>{const index=termSeriesColors.indexOf(base),slot=base==='#168CB8'?1:termSeriesSlots[index];return termCat(slot,base,`${id} bar`,termRect(x,y,width,height,'currentColor',0,'data-terminal-area'));}).join('');
+// The traced yield bars come in fragments; each period is rebuilt as two whole bars with the first series taller.
+export function yieldBars(bars){
+ const groups=[];
+ for(const bar of [...bars].sort((a,b)=>a.x-b.x)){const last=groups.at(-1);if(last&&bar.x-last[0].x<30)last.push(bar);else groups.push([bar]);}
+ return groups.flatMap(group=>{
+  const whole=['#1F5FD6','#168CB8'].map(base=>{const parts=group.filter(bar=>bar.base===base);return {base,x:Math.min(...parts.map(p=>p.x)),width:Math.max(...parts.map(p=>p.width)),top:Math.min(...parts.map(p=>p.y)),bottom:Math.max(...parts.map(p=>p.y+p.height))};});
+  const bottom=Math.max(whole[0].bottom,whole[1].bottom),heights=whole.map(bar=>bottom-bar.top).sort((a,b)=>b-a);
+  return whole.map((bar,i)=>({base:bar.base,x:bar.x,width:bar.width,y:bottom-heights[i],height:heights[i]}));
+ });
 }
+function termBarSet(id){
+ return (id==='yield'?yieldBars(terminalReference.bars.yield):terminalReference.bars[id]).map(({base,x,y,width,height})=>{const index=termSeriesColors.indexOf(base),slot=base==='#168CB8'?1:termSeriesSlots[index];return termCat(slot,base,`${id} bar`,termRect(x,y,width,height,'currentColor',0,'data-terminal-area'));}).join('');
+}
+// Keeps the traced short-term wiggles but replaces the flat overall level with a clear climb.
+export function risingCurve(points,start,end){
+ const first=points[0][0],span=points.at(-1)[0]-first;
+ return points.map(([x,y],i)=>{
+  const near=points.slice(Math.max(0,i-12),i+13),level=near.reduce((sum,p)=>sum+p[1],0)/near.length;
+  return [x,Number((start+(end-start)*((x-first)/span)**1.3+(y-level)*1.4).toFixed(3))];
+ });
+}
+const termBondsPoints=points=>risingCurve(points,222,154);
 function termBondsPlot(){
- const body=termLegend(1211,126,['Factory1','Factory2','Factory3'],71)+termGrid(1206,144,264,88,['100%','80%','60%','40%','20%','0%'])+termTraceSet('bonds')+termDates([1223,1281,1340,1399,1458],250,['24.Aug','25.Aug','26.Aug','27.Aug','28.Aug']);
+ const line=terminalReference.lines.bonds[0],points=termBondsPoints(line.points),path='M'+points.map(p=>p.join(' ')).join('L');
+ const series=termCat(0,line.base,'Factory1',`<defs><linearGradient id="terminal-bonds-gradient" x1="0" y1="0" x2="0" y2="1"><stop stop-color="currentColor" stop-opacity=".22"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs><path d="${path}L${points.at(-1)[0]} 232L${points[0][0]} 232Z" fill="url(#terminal-bonds-gradient)" data-terminal-area data-terminal-area-trace="bonds:0" data-terminal-baseline="232"/><path d="${path}" fill="none" stroke="currentColor" stroke-width="1.25" data-terminal-trace="bonds:0" data-terminal-line data-terminal-width="1.25"/>`);
+ const body=termLegend(1211,126,['Factory1'],71)+termGrid(1206,144,264,88,['100%','80%','60%','40%','20%','0%'])+series+termDates([1223,1281,1340,1399,1458],250,['24.Aug','25.Aug','26.Aug','27.Aug','28.Aug']);
  return termCard('major-bonds-trend',1198,83,314,176,'Major 10-year bonds ›',body);
 }
 function termArc(cx,cy,outer,inner,start,end){
@@ -200,7 +221,12 @@ export function applyTerminalPalette(element,palette,theme,globalStyle={}){
  for(const trace of element.querySelectorAll('[data-terminal-trace]')){
   const [id,index]=trace.dataset.terminalTrace.split(':');
   const geometry=id==='yield'?terminalReference:reference;
-  trace.setAttribute('d','M'+geometry.lines[id][index].points.map(p=>p.join(' ')).join('L'));
+  const points=geometry.lines[id][index].points;
+  trace.setAttribute('d','M'+(id==='bonds'?termBondsPoints(points):points).map(p=>p.join(' ')).join('L'));
+ }
+ for(const area of element.querySelectorAll('[data-terminal-area-trace]')){
+  const [id,index]=area.dataset.terminalAreaTrace.split(':'),points=termBondsPoints(reference.lines[id][index].points),base=area.dataset.terminalBaseline;
+  area.setAttribute('d','M'+points.map(p=>p.join(' ')).join('L')+`L${points.at(-1)[0]} ${base}L${points[0][0]} ${base}Z`);
  }
  for(const mark of element.querySelectorAll('[data-terminal-base]')){
   const role=mark.dataset.colorRole,slot=Number(mark.dataset.terminalSlot??mark.dataset.colorIndex),index=slot%colors[role].length,color=colors[role][index];

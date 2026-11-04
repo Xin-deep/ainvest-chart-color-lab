@@ -72,9 +72,37 @@ test('chart headers show a pager or three actions, and the choice survives valid
 test('phones only have theme and palette controls above the input, computers keep the quick actions',()=>{
  const board=defaultAimeBoard();
  const phone=renderAimeScene(board,'light',{themeSwitch:{disabled:false}}),computer=renderAimeScene(board,'light');
- assert.match(phone,/aime-theme-switch" data-action="theme" data-value="dark"/);assert.doesNotMatch(phone,/Fast|Price Forecast|Circle Analysis/);
- assert.doesNotMatch(computer,/aime-theme-switch/);assert.match(computer,/Fast/);assert.match(computer,/Price Forecast/);assert.match(computer,/Circle Analysis/);
+ assert.match(phone,/aime-theme-switch" data-action="theme" data-value="dark"/);assert.doesNotMatch(phone,/Fast|Price Forecast|Circle Analysis/);assert.doesNotMatch(phone,/aime-composer-field/);
+ assert.doesNotMatch(computer,/aime-theme-switch/);assert.match(computer,/Fast/);assert.match(computer,/aime-composer-field/);assert.match(computer,/Price Forecast/);assert.match(computer,/Circle Analysis/);
  assert.match(renderAimeScene(board,'dark',{themeSwitch:{disabled:true}}),/data-value="light"[^>]*disabled/);
  const withPalettes=renderAimeScene(board,'light',{themeSwitch:{status:'<span class="live-dot"></span>',palettes:'<div class="aime-viewer-palettes"></div>'}});
  assert.ok(withPalettes.indexOf('live-dot')<withPalettes.indexOf('aime-theme-switch')&&withPalettes.indexOf('aime-theme-switch')<withPalettes.indexOf('aime-viewer-palettes'));
+});
+
+test('the growth chart can show one line and only its main line has an area',()=>{
+ const growth={...defaultAimeBoard().modules[0]};
+ const areas=module=>aimeChartConfig(module).series.map(s=>s.area);
+ assert.deepEqual(areas(growth),[true,false,false]);
+ assert.deepEqual(areas({...growth,area:'off'}),[false,false,false]);
+ const board=defaultAimeBoard();board.modules[0].series=1;board.modules[0].area='off';
+ const restored=validateAimeBoard(board).modules[0];
+ assert.equal(restored.series,1);assert.equal(restored.area,'off');
+ assert.deepEqual(areas({...restored,area:'on'}),[true]);
+ assert.equal(aimeChartConfig(restored).series.length,1);
+ assert.match(renderAimeScene({...board,modules:[restored]},'light'),/AAPL Net Income YoY</);
+ const other=validateAimeBoard({...board,modules:[{...restored,fixture:undefined,series:1}]}).modules[0];
+ assert.equal(other.series,2);
+});
+
+test('the growth chart has dense lines that cross',()=>{
+ const growth=defaultAimeBoard().modules[0];
+ assert.equal(growth.count,36);
+ const series=aimeChartConfig(growth).series.map(s=>s.data);
+ assert.ok(series.every(line=>line.length===36&&line.every(v=>v>0&&v<1)));
+ const crossings=(a,b)=>a.slice(1).filter((v,i)=>Math.sign(a[i]-b[i])!==Math.sign(v-b[i+1])).length;
+ for(const [a,b] of [[0,1],[0,2],[1,2]])assert.ok(crossings(series[a],series[b])>=3,'lines '+a+' and '+b);
+ const stored=defaultAimeBoard();stored.modules[0].count=12;
+ assert.equal(validateAimeBoard(stored).modules[0].count,36);
+ stored.modules[0].count=20;
+ assert.equal(validateAimeBoard(stored).modules[0].count,20);
 });
