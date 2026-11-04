@@ -4,6 +4,7 @@ const LIVE_OWNER_KEY = 'ainvest-live-owners:v1';
 const ACTIVE_LIVE_KEY = 'ainvest-live-active:v1';
 const VIEWER_THEME_KEY = 'ainvest-live-viewer-theme:v1';
 const VIEWER_PALETTE_KEY = 'ainvest-live-viewer-palette:v1';
+const VIEWER_SCENE_KEY = 'ainvest-live-viewer-scene:v1';
 // Routine sync states stay silent; anything else needs the viewer's or owner's attention.
 const QUIET_LIVE_STATUSES = ['已连接 · 只读同步', '已同步 · 查看页面自动更新', '正在同步…'];
 const isQuietLiveStatus = status => !status || QUIET_LIVE_STATUSES.includes(status);
@@ -75,6 +76,20 @@ function saveViewerPalette(storage, id, palette) {
     storage.setItem(VIEWER_PALETTE_KEY, JSON.stringify(choices));
   } catch { /* The choice still applies to the open page. */ }
 }
+function readViewerScene(storage, id, known) {
+  try {
+    const scene = JSON.parse(storage.getItem(VIEWER_SCENE_KEY) || '{}')?.[id];
+    return known.includes(scene) ? scene : null;
+  } catch { return null; }
+}
+function saveViewerScene(storage, id, scene) {
+  try {
+    const saved = JSON.parse(storage.getItem(VIEWER_SCENE_KEY) || '{}');
+    const choices = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+    choices[id] = scene;
+    storage.setItem(VIEWER_SCENE_KEY, JSON.stringify(choices));
+  } catch { /* The choice still applies to the open page. */ }
+}
 function validateSupabaseConfig(config) {
   const url = new URL(config.url);
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('Supabase Project URL 需要有效的 HTTPS 根地址');
@@ -129,4 +144,4 @@ function createLiveClient(base, options = {}) {
     }
   };
 }
-export { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, saveViewerPalette, isQuietLiveStatus, discoverSyncBase, createLiveClient, validateSupabaseConfig, syncIdentity };
+export { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, saveViewerPalette, readViewerScene, saveViewerScene, isQuietLiveStatus, discoverSyncBase, createLiveClient, validateSupabaseConfig, syncIdentity };
