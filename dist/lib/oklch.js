@@ -22,3 +22,12 @@ export function checkOklch(value){
   return {valid,inSrgb:valid&&oklchToLinearSrgb(value).every(v=>v>=-1e-7&&v<=1+1e-7)};
 }
 export function oklchCss(value){return `oklch(${(value.l*100).toFixed(3)}% ${value.c.toFixed(5)} ${value.h===null?'none':value.h.toFixed(3)})`;}
+// The color at t along a low, middle, high ramp, mixed in OKLab so the blend stays even and free of muddy midpoints.
+export function rampColor(low,middle,high,t){
+ const position=Math.max(0,Math.min(1,t));
+ const [from,to,amount]=position<.5?[low,middle,position*2]:[middle,high,(position-.5)*2];
+ const lab=hex=>{const {l,c,h}=hexToOklch(hex),angle=(h??0)*Math.PI/180;return [l,c*Math.cos(angle),c*Math.sin(angle)];};
+ const a=lab(from),b=lab(to),[l,x,y]=a.map((v,i)=>v+(b[i]-v)*amount);
+ const linear=oklchToLinearSrgb({l,c:Math.hypot(x,y),h:Math.atan2(y,x)*180/Math.PI});
+ return '#'+linear.map(v=>{const clipped=Math.min(1,Math.max(0,v)),encoded=clipped<=.0031308?12.92*clipped:1.055*clipped**(1/2.4)-.055;return Math.round(encoded*255).toString(16).padStart(2,'0');}).join('').toUpperCase();
+}

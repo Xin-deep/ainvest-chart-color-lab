@@ -1,6 +1,7 @@
 import { terminalDarkReference } from '../data/terminal-dark-reference.js';
 import { terminalReference } from '../data/terminal-reference.js';
 import { presets } from '../data/presets.js';
+import { rampColor } from '../lib/oklch.js';
 
 export const TERMINAL_SIZE = {width:1856,height:1335,sourceWidth:2880,sourceHeight:2073};
 const termE = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -120,7 +121,8 @@ function termArc(cx,cy,outer,inner,start,end){
 function termFear(){
  let body=`<path d="M284 420A108 108 0 0 1 500 420Z" fill="var(--term-gauge-inner)"/><path d="M348 420A44 44 0 0 1 436 420Z" fill="var(--term-gauge-center)"/>`;const cx=392,cy=420;
  for(let i=0;i<10;i++){const a=Math.PI+i*Math.PI/10,b=a+Math.PI/10-.017;body+=`<path d="${termArc(cx,cy,121,110,a,b)}" fill="var(--term-gauge-track)"/>`;}
- terminalReference.gauge.forEach((base,i)=>{if(base==='#FFFFFF')return;const a=Math.PI+i*Math.PI/180,b=a+Math.PI/180*1.015;body+=termMark('semantic',i<90?1:0,base,'Fear & Greed range',`<path d="${termArc(cx,cy,108,89,a,b)}" fill="currentColor" data-terminal-area/>`);});
+ // Each slice is computed from the palette, so editing any of the three colors redraws the whole gradient.
+ terminalReference.gauge.forEach((base,i)=>{if(base==='#FFFFFF')return;const a=Math.PI+i*Math.PI/180,b=a+Math.PI/180*1.015,t=i/179,[role,index,label]=t<.4?['semantic',1,'Fear & Greed 下跌']:t<=.6?['neutral',0,'Fear & Greed 中性']:['semantic',0,'Fear & Greed 上涨'];body+=termMark(role,index,base,label,`<path d="${termArc(cx,cy,108,89,a,b)}" fill="currentColor" data-terminal-area data-terminal-gauge="${t}"/>`);});
  body+=`<path d="M389 375 392 304 396 375Z" fill="var(--term-text)"/>`+termText(392,401,'58',16,{bold:true,anchor:'middle'})+termText(392,416,'Fear',10,{fill:'var(--term-muted)',anchor:'middle'})+termText(306,416,'0',11,{fill:'var(--term-muted)'})+termText(482,416,'100',11,{fill:'var(--term-muted)',anchor:'end'})+termText(271,433,'Extreme Fear',10.5,{fill:'var(--term-muted)'})+termText(512,433,'Extreme Greed',10.5,{fill:'var(--term-muted)',anchor:'end'});
  body+=termRect(246,447,293,23,'var(--term-bg)',3,'stroke="var(--term-border)"');['1 Year','1 Month','1 Week'].forEach((label,i)=>body+=termButton(247+i*97,448,95,21,label,{active:!i,control:label,group:'fear-period'}));
  [['Extreme Fear','17 Days(5.11%)'],['Fear','75 Days(20.60%)'],['Neutral','48 Days(13.19%)'],['Greed','175 Days(48.08%)'],['Extreme Greed','49 Days(13.46%)']].forEach(([label,value],i)=>{const y=489+i*28;body+=termText(246,y,label,12,{fill:'var(--term-muted)'})+termText(540,y,value,12,{anchor:'end'});if(i<4)body+=termLine(245,y+8,544,y+8);});
@@ -231,8 +233,10 @@ export function applyTerminalPalette(element,palette,theme,globalStyle={}){
  for(const mark of element.querySelectorAll('[data-terminal-base]')){
   const role=mark.dataset.colorRole,slot=Number(mark.dataset.terminalSlot??mark.dataset.colorIndex),index=slot%colors[role].length,color=colors[role][index];
   mark.dataset.colorIndex=String(index);
+  const gauge=mark.querySelector?.('[data-terminal-gauge]');
+  if(gauge){mark.style.color=rampColor(colors.semantic[1].hex,colors.neutral[0].hex,colors.semantic[0].hex,Number(gauge.dataset.terminalGauge));continue;}
   // Series and legends always use the exact active palette value, including the baseline.
-  // Continuous sentiment ramps retain their reference shades until the semantic role is edited.
+  // Other semantic marks keep their reference shades until the semantic role is edited.
   mark.style.color=role==='semantic'&&color.hex.toUpperCase()===original[role][index]?.hex.toUpperCase()?mark.dataset.terminalBase:color.hex;
  }
  for(const line of element.querySelectorAll('[data-terminal-line]'))line.setAttribute('stroke-width',typeof globalStyle.lineWidth==='number'?globalStyle.lineWidth:line.dataset.terminalWidth);

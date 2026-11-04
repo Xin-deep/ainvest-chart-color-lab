@@ -31,6 +31,11 @@ function mountCompactChart(target,module,palette,mode,onColor,density='compact',
   const colors=palette.themes[mode];host.__paletteLabColors=colors.categorical.map(c=>c.hex);host.__paletteLabNeutral=colors.surface[3].hex;
   if(module.colorSlots)host.__paletteLabColors=module.colorSlots.map(i=>colors.categorical[i]?.hex||host.__paletteLabNeutral);
   if(module.fixture==='aime-duration')host.__paletteLabColors=Array(12).fill(colors.categorical[0].hex);
+  // The investment score reads as good or bad, so it follows the rising color rather than a series color.
+  if(module.fixture==='financial-rating'){host.__paletteLabColors=[colors.semantic[0].hex];host.style.setProperty('--opacity-radar-area','.5');
+    // Leave both sides enough room for the longest dimension name instead of truncating it.
+    host.style.setProperty('--size-radar-radius',`${Math.max(36,Math.floor(((target.clientWidth||230)-120)/2))}px`);
+  }
   const lineColors=colors.line.map(c=>c.hex);
   host.__paletteLabSeriesColors=series=>seriesPaletteSlots(series).map(({role,index})=>chartColorAt(role==='line'?lineColors:host.__paletteLabColors,index,host.__paletteLabNeutral));
   // Preserve the upstream axis, legend and grid tokens until the designer edits that surface role.
@@ -69,7 +74,7 @@ function mountCompactChart(target,module,palette,mode,onColor,density='compact',
   }
   const keys=(cfg.items||cfg.series||cfg.entities||cfg.root?.children||[]).map(item=>typeof item==='string'?item:item.name);
   // Double click picks a palette slot; ordinary click keeps the upstream chart/legend interaction.
-  host.addEventListener('dblclick',event=>{const group=event.target.closest('[data-key]');if(group){const index=keys.indexOf(group.dataset.key);const seat=cfg.series&&seriesPaletteSlots(cfg.series)[index];if(seat?.role==='line'){onColor(seat.index%lineColors.length,'line');return;}const slot=example.chart==='treemap'?0:seat?seat.index:index;const paletteIndex=module.fixture==='aime-duration'?0:chartColorSlot(slot,module.colorSlots,colors.categorical.length);if(paletteIndex>=0&&paletteIndex<colors.categorical.length)onColor(paletteIndex);}});
+  host.addEventListener('dblclick',event=>{const group=event.target.closest('[data-key]');if(group){const index=keys.indexOf(group.dataset.key);if(module.fixture==='financial-rating'){onColor(0,'semantic');return;}const seat=cfg.series&&seriesPaletteSlots(cfg.series)[index];if(seat?.role==='line'){onColor(seat.index%lineColors.length,'line');return;}const slot=example.chart==='treemap'?0:seat?seat.index:index;const paletteIndex=module.fixture==='aime-duration'?0:chartColorSlot(slot,module.colorSlots,colors.categorical.length);if(paletteIndex>=0&&paletteIndex<colors.categorical.length)onColor(paletteIndex);}});
   return {destroy(){texture.destroy();summaryObserver?.disconnect();instance.destroy();shadow.replaceChildren();}};
 }
 export { mountCompactChart, compactCatalog };

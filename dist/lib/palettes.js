@@ -1,6 +1,8 @@
 import { normalizeColor, hexToHsv, hsvToHex } from './colors.js';
 export const clone = value => JSON.parse(JSON.stringify(value));
-export const roles = { categorical: '分类色', line: '折线色', semantic: '涨跌色', surface: '界面色' };
+export const roles = { categorical: '分类色', line: '折线色', semantic: '涨跌色', neutral: '中性色', surface: '界面色' };
+// Stored beside semantic because the live database requires exactly two colors there; the console lists it between them.
+export const defaultNeutral = '#F2B852';
 // These roles can be reordered and resized; the others have fixed positions.
 export const seriesRoles = ['categorical', 'line'];
 export const surfaces = {
@@ -10,6 +12,7 @@ export const surfaces = {
 export const surfaceNames = ['页面背景', '卡片背景', '主要文字', '次要文字', '分隔线', '网格线'];
 // Palettes without their own line colors take the end of the categorical list, last color first.
 const defaultLines = colors => colors.slice(-2).reverse().map((color, i) => ({ id: `line-${i + 1}`, name: `折线 ${String(i + 1).padStart(2, '0')}`, hex: color.hex }));
+const neutralColor = hex => [{ id: 'neutral-1', name: '中性', hex }];
 const colorList = (list, names, prefix) => list.map((hex, i) => ({ id: `${prefix}-${i + 1}`, name: names?.[i] || `系列 ${String(i + 1).padStart(2, '0')}`, hex: normalizeColor(hex) }));
 export function createPalette({ id, name, light, dark, names, lines, up = '#009B67', down = '#FF381A', darkUp = up, darkDown = down, source = '自定义色板', availableThemes = ['light', 'dark'] }) {
   return {
@@ -18,6 +21,7 @@ export function createPalette({ id, name, light, dark, names, lines, up = '#009B
       categorical: colorList(theme === 'light' ? (light || dark) : (dark || light), names, 'category'),
       line: lines ? colorList(lines, lines.map((_, i) => `折线 ${String(i + 1).padStart(2, '0')}`), 'line') : defaultLines(colorList(theme === 'light' ? (light || dark) : (dark || light), names, 'category')),
       semantic: colorList(theme === 'light' ? [up, down] : [darkUp, darkDown], ['上涨', '下跌'], 'state'),
+      neutral: neutralColor(defaultNeutral),
       surface: colorList(surfaces[theme], surfaceNames, 'surface')
     }]))
   };
@@ -35,6 +39,7 @@ export function validatePalette(input) {
     if (!input.themes[theme]) throw new Error(`缺少 ${theme} 主题配置`);
     for (const role of Object.keys(roles)) {
       // Palettes saved before line colors existed get the same default as a new palette.
+      if (role === 'neutral') { const stored = input.themes[theme].neutral; output.themes[theme].neutral = neutralColor(stored ? validateColors(stored)[0].hex : defaultNeutral); continue; }
       if (role === 'line' && !input.themes[theme].line) { output.themes[theme].line = defaultLines(output.themes[theme].categorical); continue; }
       output.themes[theme][role] = validateColors(input.themes[theme][role]).map((c, i) => ({ ...c, id: `${role}-${i + 1}` }));
     }
@@ -80,6 +85,15 @@ export function writeBackDraft({ draft, saved, presetEdits }, presets) {
   if (!preset) return;
   if (countColorChanges(preset, draft)) presetEdits[draft.id] = clone(draft);
   else delete presetEdits[draft.id];
+}
+// Locks are only remembered for palettes that still exist.
+export function restoreLockedPalettes(input, knownIds) {
+  return Array.isArray(input) ? [...new Set(input)].filter(id => knownIds.includes(id)) : [];
+}
+// Puts schemes in the given id order; anything the order does not mention keeps its place at the end.
+export function orderSavedPalettes(saved, ids) {
+  const rank = id => { const index = ids.indexOf(id); return index < 0 ? ids.length : index; };
+  return [...saved].sort((a, b) => rank(a.id) - rank(b.id));
 }
 // A position is one series in both themes, so structure edits apply to light and dark together.
 const seriesLists = (palette, role) => ['light', 'dark'].map(theme => palette.themes[theme][role]);

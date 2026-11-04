@@ -123,3 +123,15 @@ test('the bonds curve climbs clearly and stays inside its grid in both themes',(
   assert.deepEqual(points.map(p=>p[0]),reference.lines.bonds[0].points.map(p=>p[0]));
  }
 });
+
+test('the fear and greed gauge is computed from fall, neutral and rise colors',()=>{
+ const html=renderTerminalScene(),slices=[...html.matchAll(/data-color-role="(\w+)" data-color-index="(\d)"[^>]*aria-label="Fear &amp; Greed ([^"，]+)/g)];
+ assert.ok(slices.length>160);
+ assert.deepEqual([...new Set(slices.map(m=>m[1]+m[2]+m[3]))],['semantic1下跌','neutral0中性','semantic0上涨']);
+ const palette=structuredClone(presets[0]),slice={dataset:{colorRole:'neutral',colorIndex:'0',terminalSlot:'0',terminalBase:'#000000'},style:{},querySelector:()=>({dataset:{terminalGauge:'0.25'}})};
+ const host={style:{setProperty(){}},querySelector:()=>null,querySelectorAll:s=>s==='[data-terminal-base]'?[slice]:[]};
+ applyTerminalPalette(host,palette,'light');const before=slice.style.color;
+ palette.themes.light.neutral[0].hex='#0000FF';applyTerminalPalette(host,palette,'light');const neutralEdited=slice.style.color;
+ palette.themes.light.semantic[1].hex='#00FF00';applyTerminalPalette(host,palette,'light');
+ assert.notEqual(neutralEdited,before);assert.notEqual(slice.style.color,neutralEdited);
+});

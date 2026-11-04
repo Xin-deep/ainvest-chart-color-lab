@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeColor, hsvToHex, hexToHsv } from '../dist/lib/colors.js';
-import { parseImport, validatePalette, createPalette, restorePalette, restoreSavedPalettes, restorePresetEdits, countColorChanges, writeBackDraft, moveSeriesColor, removeSeriesColor, addSeriesColor, indexAfterMove } from '../dist/lib/palettes.js';
+import { parseImport, validatePalette, createPalette, restorePalette, restoreSavedPalettes, restorePresetEdits, restoreLockedPalettes, orderSavedPalettes, countColorChanges, writeBackDraft, moveSeriesColor, removeSeriesColor, addSeriesColor, indexAfterMove } from '../dist/lib/palettes.js';
+import { rampColor } from '../dist/lib/oklch.js';
 import { presets, dropRetiredBackgrounds } from '../dist/data/presets.js';
 
 test('normalize supported color formats without silently clipping invalid colors', () => {
@@ -209,4 +210,42 @@ test('old preset backgrounds are dropped on load while hand-edited colors stay',
   const scheme = { ...structuredClone(presets[0]), id: 'plan-a' };
   scheme.themes.dark.surface[0].hex = '#000000';
   assert.equal(dropRetiredBackgrounds(scheme).themes.dark.surface[0].hex, '#000000');
+});
+
+test('saved schemes follow the dragged order and keep anything it does not mention', () => {
+  const scheme = id => ({ id, name: id }), saved = ['a', 'b', 'c', 'd'].map(scheme);
+  const ids = list => list.map(p => p.id);
+  assert.deepEqual(ids(orderSavedPalettes(saved, ['c', 'a', 'b', 'd'])), ['c', 'a', 'b', 'd']);
+  assert.deepEqual(ids(orderSavedPalettes(saved, ['d', 'a'])), ['d', 'a', 'b', 'c']);
+  assert.deepEqual(ids(saved), ['a', 'b', 'c', 'd']);
+});
+
+test('the neutral color stays apart from the two semantic colors and old palettes get the default', () => {
+  for (const preset of presets) for (const theme of ['light', 'dark']) {
+    assert.equal(preset.themes[theme].semantic.length, 2);
+    assert.deepEqual(preset.themes[theme].neutral.map(c => c.hex), ['#F2B852']);
+  }
+  const old = structuredClone(presets[0]);
+  delete old.themes.light.neutral; delete old.themes.dark.neutral;
+  assert.equal(validatePalette(old).themes.dark.neutral[0].hex, '#F2B852');
+  const edited = structuredClone(presets[0]);
+  edited.themes.light.neutral[0].hex = '#123456';
+  assert.equal(validatePalette(edited).themes.light.neutral[0].hex, '#123456');
+  assert.equal(countColorChanges(presets[0], edited), 1);
+});
+test('the three color ramp hits each stop and moves when any of them changes', () => {
+  assert.equal(rampColor('#FF0000', '#FFFF00', '#00FF00', 0), '#FF0000');
+  assert.equal(rampColor('#FF0000', '#FFFF00', '#00FF00', .5), '#FFFF00');
+  assert.equal(rampColor('#FF0000', '#FFFF00', '#00FF00', 1), '#00FF00');
+  const base = rampColor('#FF0000', '#FFFF00', '#00FF00', .25);
+  assert.notEqual(rampColor('#0000FF', '#FFFF00', '#00FF00', .25), base);
+  assert.notEqual(rampColor('#FF0000', '#00FFFF', '#00FF00', .25), base);
+  assert.notEqual(rampColor('#FF0000', '#FFFF00', '#00FF00', .75), rampColor('#FF0000', '#FFFF00', '#0000FF', .75));
+  assert.equal(rampColor('#FFFFFF', '#808080', '#000000', .5), '#808080');
+});
+
+test('locks survive reloading only for palettes that still exist', () => {
+  assert.deepEqual(restoreLockedPalettes(['claude', 'gone', 'claude', 'plan-a'], ['ainvest', 'claude', 'plan-a']), ['claude', 'plan-a']);
+  assert.deepEqual(restoreLockedPalettes('claude', ['claude']), []);
+  assert.deepEqual(restoreLockedPalettes(undefined, ['claude']), []);
 });
