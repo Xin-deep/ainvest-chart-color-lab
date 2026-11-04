@@ -3,17 +3,17 @@
 - **线上地址：** https://xin-deep.github.io/ainvest-chart-color-lab/
 - **手机预览：** https://xin-deep.github.io/ainvest-chart-color-lab/aime.html
 
-把候选色板放进接近真实产品的页面里，对比基线和修改结果，并检查色差、色觉缺陷和对比度。变更记录见 [CHANGELOG](CHANGELOG.md)。
+把候选色板放进接近真实产品的页面里对比，并检查色差、色觉缺陷和对比度。变更记录见 [CHANGELOG](CHANGELOG.md)。
 
 ## 功能
 
-- **五个场景：** Aime 对话、财报分析、自由看板、web 市场、Terminal 工作区，均支持浅色和深色。
-- **调色：** 分类色、涨跌色、界面色独立编辑，支持 OKLCH、HSB、HEX、RGB、HSL，以及 A/B 对比、撤销和 JSON 导入导出。
-- **分类色顺序：** 可拖动排序、添加和删除，同时作用于浅色和深色；涨跌色和界面色位置固定。
+- **五个场景：** Aime 对话、web 市场、Terminal 工作区、财报分析、自由看板，均支持浅色和深色。
+- **调色：** 分类色、折线色、涨跌色、界面色独立编辑，支持 OKLCH、HSB、HEX、RGB、HSL，以及撤销和 JSON 导入导出。
+- **分类色和折线色顺序：** 可拖动排序、添加和删除，同时作用于浅色和深色；涨跌色和界面色位置固定。
 - **预置色板：** Ainvest 原始、Claude、TradingView、Simply Wall St、Robinhood，在 [presets.js](dist/data/presets.js) 维护。
 - **色值检验：** OKLCH 分布、ΔE、色觉缺陷模拟和 WCAG 对比度。
 - **Aime 图表表头：** 单张图表显示复制、下载、全屏；可切换的图表显示页码和更多，可在模块设置里调整。这些控件目前只是模板展示，点击没有效果。
-- **手机分享：** 固定只读链接实时同步，也可以生成不再更新的静态快照。
+- **分享：** 固定只读链接实时同步，也可以生成不再更新的静态快照（只包含 Aime 对话）。
 
 图表使用固定演示数据，不是实时行情。方案默认保存在各自的浏览器中。
 
@@ -21,13 +21,13 @@
 
 折柱组合图的柱子用「分类色」，折线用「折线色」；纯折线图仍用分类色。全球热力图的底图和国旗从 jsDelivr 加载，是唯一需要联网的图表。
 
-## 手机分享
+## 分享
 
 点「分享预览」→「获取固定链接」，把 `aime.html?live=…` 发给查看者。手机打开只显示 Aime 对话；电脑或平板打开时右侧有工具栏，可以切换场景、色板和浅深色。两种方式都只读，编辑只在电脑或平板的网站上提供。不带固定链接直接打开 `aime.html` 仍是手机预览。
 
 - **同步内容：** 配色、各场景的模块布局和色板列表（预置色板和已保存方案）会自动同步。**拿到链接的人都能看到已保存方案及其名称。**
 - **再次分享：** 同一浏览器复用原链接，并把内容更新为当前配色。
-- **查看者：** 只读，可以自行切换主题和色板，电脑上还能切换场景，这些选择不会写回方案。顶部绿点表示已连接，红点表示断连。
+- **查看者：** 只读，可以自行切换主题和色板，电脑上还能切换场景，这些选择不会写回方案。手机上的色板切换在页面底部，第一排是默认色板，第二排是已保存方案；绿点表示已连接，红点表示断连。
 - **编辑权限：** 凭证只保存在创建链接的浏览器中，清理存储后无法恢复，只读链接也不能复制出副本，需要编辑的方案请提前导出 JSON。目前没有账号和撤销链接功能。
 
 ## 本地运行
@@ -61,7 +61,9 @@ web 和 Terminal 场景带大量参考数据，在 `app.js` 里按需加载，�
 
 **改完 `dist/` 要重建离线版并一起提交：** 执行 `npm run build:preview` 更新 `preview.html`。它不随 Pages 发布，CI 也不检查它是否最新。
 
-重建第三方依赖时才需要下面的命令，上游版本记录在 `dist/vendor/vis-lab/UPSTREAM.json`：
+图表数据和取色逻辑也打包在 `dist/vendor/vis-lab.bundle.js` 里。改了 `dist/data/aime-reference.js`、`dist/data/financial-shared.js`、`dist/lib/palettes.js` 里的界面色或 `scripts/` 下的图表脚本后，要运行 `npm run build:vis` 并提交产物，否则页面还是旧数据，而单元测试照样通过。
+
+打包命令如下，上游版本记录在 `dist/vendor/vis-lab/UPSTREAM.json`：
 
 ```sh
 npm run build:vis       # Vis Lab 图表引擎
@@ -70,7 +72,7 @@ npm run build:supabase  # Supabase SDK
 
 ## 色板数据格式
 
-`schemaVersion: 1` 的色板包含 `name`、`source`、`availableThemes`、`themes.light`、`themes.dark`。每个主题包含 `categorical`、`semantic`、`surface`，颜色项使用 `id`、`name`、`hex`。
+`schemaVersion: 1` 的色板包含 `name`、`source`、`availableThemes`、`themes.light`、`themes.dark`。每个主题包含 `categorical`、`line`、`semantic`、`surface`，颜色项使用 `id`、`name`、`hex`。没有 `line` 的旧文件会取 `categorical` 最后两个作为默认值。
 
 - `semantic` 顺序：上涨、下跌。
 - `surface` 顺序：页面背景、卡片背景、主要文字、次要文字、分隔线、网格线。

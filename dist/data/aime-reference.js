@@ -5,8 +5,10 @@ const aimeResample = (values,n) => Array.from({length:n},(_,i)=>{const x=n===1?0
 function aimeChartConfig(module){
   const n=module.count;
   if(module.fixture==='aime-growth'){
-    const data=[[.08,.35,.05,.12,.21,.29,.18,.39,.3,.3,.18,.07],[.4,.65,.36,.42,.52,.61,.5,.72,.63,.63,.51,.37],[.82,.91,.81,.83,.86,.89,.85,.93,.9,.9,.86,.81]];
-    return {categories:Array.from({length:n},(_,i)=>i===0?'2025 Q3':i===Math.floor(n/3)?'2025 Q4':i===Math.floor(2*n/3)?'2026 Q1':i===n-1?'2026 Q2':'\u200b'.repeat(i+1)),series:Array.from({length:module.series},(_,i)=>({name:['Net Income YoY','Total Revenue YoY','Diluted EPS YoY'][i]||`Metric ${i+1}`,data:aimeResample(data[i%3],n).map(v=>i<3?v:v*.75),type:'line',area:true})),unit:'%',zoom:{start:0,end:1}};
+    // Close levels with different rhythms, so the lines keep crossing each other.
+    const wave=(base,a,fa,pa,b,fb,pb)=>Array.from({length:36},(_,i)=>Number((base+a*Math.sin(i*fa+pa)+b*Math.sin(i*fb+pb)).toFixed(3)));
+    const data=[wave(.46,.2,.55,0,.08,1.3,1),wave(.5,.17,.38,2,.09,1.7,.4),wave(.52,.22,.7,4,.06,1.1,2.5)];
+    return {categories:Array.from({length:n},(_,i)=>i===0?'2025 Q3':i===Math.floor(n/3)?'2025 Q4':i===Math.floor(2*n/3)?'2026 Q1':i===n-1?'2026 Q2':'\u200b'.repeat(i+1)),series:Array.from({length:module.series},(_,i)=>({name:['Net Income YoY','Total Revenue YoY','Diluted EPS YoY'][i]||`Metric ${i+1}`,data:aimeResample(data[i%3],n).map(v=>i<3?v:v*.75),type:'line',area:i===0&&module.area!=='off'})),unit:'%',zoom:{start:0,end:1}};
   }
   if(module.fixture==='aime-duration')return {items:[{name:'Dividend Continuous Duration',value:23},{name:'Dividend Growth Duration',value:14}],topN:2};
   if(module.fixture==='aime-factors')return {name:'Total',variant:'donut',items:Array.from({length:n},(_,i)=>({name:i<5?`Factory${i+1}`:i===5?'legend':i===6?'legend\u200b':`Factory${i+1}`,value:[.25,.18,.165,.12,.12,.10,.065][i%7]*155250000})),legend:'bottom',dataLabel:module.labels==='on',labelLayout:module.labels==='on'?'outside':'off'};

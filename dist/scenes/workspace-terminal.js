@@ -1,6 +1,6 @@
 import {workspaceReference} from '../data/workspace-reference.js';
 import {presets} from '../data/presets.js';
-import {termText,termLine,termRect,termIcon,termArc,termMark,termButton,applyTerminalPalette} from './terminal.js';
+import {termText,termLine,termRect,termIcon,termArc,termMark,termButton,applyTerminalPalette,yieldBars,risingCurve} from './terminal.js';
 
 const wsText=termText,wsLine=termLine,wsRect=termRect;
 const wsDocument=(x,y,size=12)=>`<g transform="translate(${x} ${y}) scale(${size/14})" fill="none" stroke="var(--term-text)" stroke-width="1"><path d="M2 1h6l4 4v8H2ZM8 1v4h4M4 7h6M4 9h6"/></g>`;
@@ -20,11 +20,22 @@ function wsHeading(x,y,w,title,plus=true){
 function wsCard(id,x,y,w,h,title,body,{shade=false,heading=true}={}){
  return `<g data-workspace-widget="${id}" role="group" aria-label="${title}">${wsRect(x,y,w,h,shade?'var(--ws-alt-card)':'var(--term-bg)',5)}${heading?wsHeading(x,y,w,title):''}${body}</g>`;
 }
-function wsBars(id){
+// Each volume bar becomes one candle: the curve inside its slot gives the high and low, the previous close the open.
+export function stockCandles(points,bars){
+ const step=bars.length>1?bars[1].x-bars[0].x:bars[0].width;
+ let close=points[0][1];
+ return bars.map(bar=>{
+  const center=bar.x+bar.width/2,slot=points.filter(([x])=>x>=center-step/2&&x<center+step/2);
+  const ys=slot.length?slot.map(p=>p[1]):[close],open=close;
+  close=ys.at(-1);
+  return {x:center,width:bar.width,open,close,high:Math.min(open,...ys),low:Math.max(open,...ys),down:close>open};
+ });
+}
+function wsBars(id,candles=[]){
  const colors=['#1F5FD6','#D9720B','#C14696','#0E9C84','#7647C8'];
- return workspaceReference.light.bars[id].map((r,i)=>{
+ return (id==='yield'?yieldBars(workspaceReference.light.bars.yield):workspaceReference.light.bars[id]).map((r,i)=>{
   const rect=wsRect(r.x,r.y,r.width,r.height,'currentColor',0,`data-terminal-area data-workspace-bar="${id}:${i}"`);
-  return id==='volume'?wsSemantic(r.base==='#FF381A','Volume',rect):wsCat(r.base==='#168CB8'?1:colors.indexOf(r.base),`${id} series`,rect);
+  return id==='volume'?wsSemantic(candles[i]?.down,'Volume',rect):wsCat(r.base==='#168CB8'?1:colors.indexOf(r.base),`${id} series`,rect);
  }).join('');
 }
 function wsTraces(id){
@@ -56,8 +67,9 @@ function wsStock(){
  b+=wsText(82,180,'MA',9);['MA5:231.21','MA10:231.21','MA20:231.21','MA30:231.21','MA60:231.21'].forEach((v,i)=>b+=wsCat(i,v,wsText(104+i*80,180,v,9,{fill:'currentColor'})));
  b+=wsRect(83,193,23,14,'var(--term-bg)',3,'stroke="var(--term-border)"')+wsText(90,203,'⌄',12);
  ['400.00','390.00','380.00','370.00','360.00','350.00','340.00','330.00'].forEach((v,i)=>{const y=143+i*29.7;if(i>1)b+=wsLine(83,y,916,y);b+=wsText(955,y+4,v,11,{fill:'var(--term-muted)',anchor:'end'});});
- const points=workspaceReference.light.lines.stock;
- b+=wsSemantic(false,'BBD price',`<path d="${wsPath(points)}" fill="none" stroke="currentColor" stroke-width="1.1" data-terminal-line data-terminal-width="1.1" data-workspace-green="stock"/>`)+wsText(83,293,'VOL',11.5)+wsSemantic(false,'Volume',wsText(115,293,'VOLUME:12.98',11.5,{fill:'currentColor'}))+wsBars('volume');
+ const candles=stockCandles(workspaceReference.light.lines.stock,workspaceReference.light.bars.volume);
+ for(const c of candles)b+=wsSemantic(c.down,'BBD candle',`<path d="M${c.x} ${c.high}V${c.low}" stroke="currentColor" stroke-width="1" fill="none"/>`+wsRect(c.x-c.width/2,Math.min(c.open,c.close),c.width,Math.max(1,Math.abs(c.close-c.open)),'currentColor',0,'data-terminal-area'));
+ b+=wsText(83,293,'VOL',11.5)+wsSemantic(false,'Volume',wsText(115,293,'VOLUME:12.98',11.5,{fill:'currentColor'}))+wsBars('volume',candles);
  b+=wsDates([98,375,653,937],391,['9:30','11:30','13:30','15:30'])+wsLine(78,401,968,401);
  for(const [i,v] of ['1D','5D','1M','3M','6M','YTD','1Y','5Y','All'].entries())b+=wsText(86+i*39,420,v,11.5);
  b+=termIcon('settings',846,410,12)+wsText(865,420,'02:12:23(UTC+8)',11.5);
@@ -107,7 +119,12 @@ function wsSector(){
  names.forEach((v,i)=>{const col=i%3,row=Math.floor(i/3),px=994+col*128,py=819+row*36;b+=wsCat(i,v,`<circle cx="${px}" cy="${py-5}" r="3" fill="currentColor"/>`)+wsText(px+7,py,v,10,{fill:'var(--term-muted)'})+wsText(px-4,py+17,i%2?'16.24%':'28.68%',12);});
  return wsCard('sector',983,702,393,242,'ETF Holding Distribution',b);
 }
-function wsBonds(){return wsCard('bonds',1381,702,393,242,'Quick Quote',wsTesla(754,1389)+wsLegend(1393,779,3,68)+wsGrid(1393,800,338,117,['100%','80%','60%','40%','20%','0%'])+wsTraces('bonds')+wsDates([1407,1477,1547,1617,1687],934,['24.Aug','25.Aug','26.Aug','27.Aug','28.Aug']));}
+const wsBondsPoints=points=>risingCurve(points,904,813);
+function wsBonds(){
+ const points=wsBondsPoints(workspaceReference.light.lines.bonds[0]),base=917;
+ const series=wsCat(0,'Factory1',`<defs><linearGradient id="workspace-bonds-gradient" x1="0" y1="0" x2="0" y2="1"><stop stop-color="currentColor" stop-opacity=".22"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs><path d="${wsPath(points)}L${points.at(-1)[0]} ${base}L${points[0][0]} ${base}Z" fill="url(#workspace-bonds-gradient)" data-terminal-area data-workspace-area-trace="bonds:0" data-workspace-baseline="${base}"/><path d="${wsPath(points)}" fill="none" stroke="currentColor" stroke-width="1.2" data-terminal-width="1.2" data-terminal-line data-workspace-trace="bonds:0"/>`);
+ return wsCard('bonds',1381,702,393,242,'Quick Quote',wsTesla(754,1389)+wsLegend(1393,779,1,68)+wsGrid(1393,800,338,117,['100%','80%','60%','40%','20%','0%'])+series+wsDates([1407,1477,1547,1617,1687],934,['24.Aug','25.Aug','26.Aug','27.Aug','28.Aug']));
+}
 const wsPortfolios=['AIME Super Portfolio','80/20 Aggressive Growth Portfolio','US Total Equity Portfolio','All Weather Plus','Golden Butterfly Portfolio','Treasury Bill Ladder','Ultra Short Reserve','Municipal Cash Plus','Short Duration Income','Floating Rate Reserve'];
 function wsPortfolio(){
  let b='',x=79;for(const [label,w] of [['Investment purpose',137],['Risk tolerance',107],['Portfolio type',102],['Annualized return(1Y)',143],['Max drawdown',110],['Volatility',79],['Sharpe ratio',95],['⟳ Reset',61]]){b+=wsRect(x,1034,w,22,'var(--term-bg)',3,'stroke="var(--term-border)"')+wsText(x+7,1049,label+(label.includes('Reset')?'':'⌄'),11.5);x+=w+5;}
@@ -145,6 +162,7 @@ export function applyWorkspacePalette(element,palette,theme,globalStyle={}){
  const vars={'--ws-frame':value(0,'#F4F5F7','#000000'),'--term-bg':value(1,'#FFFFFF','#141414'),'--ws-alt-card':value(1,'#FFFFFF','#171717'),'--term-text':value(2,'#202020','#D2D2D2'),'--term-muted':value(3,'#858585','#858585'),'--term-border':value(4,'#DFDFDF','#2F2F2F'),'--term-grid':value(5,'#F2F2F2','#242424'),'--term-row':dark?'#1A1A1A':'#FAFAFA','--ws-news-row':dark?'#1A1A1A':'#FAFAFA','--ws-tag':dark?'#2F2F2F':'#F2F2F2','--term-soft':dark?'#434343':'#F2F2F2','--ws-search':dark?'#333333':'#E8E9EB'};
  for(const [k,v] of Object.entries(vars))page.style.setProperty(k,v);
  const reference=workspaceReference[theme];for(const img of page.querySelectorAll('[data-workspace-asset]'))img.setAttribute('href',reference.assets[img.dataset.workspaceAsset]);
- for(const trace of page.querySelectorAll('[data-workspace-trace]')){const [id,i]=trace.dataset.workspaceTrace.split(':');trace.setAttribute('d',wsPath(reference.lines[id][i]));}
+ for(const trace of page.querySelectorAll('[data-workspace-trace]')){const [id,i]=trace.dataset.workspaceTrace.split(':');const points=reference.lines[id][i];trace.setAttribute('d',wsPath(id==='bonds'?wsBondsPoints(points):points));}
+ for(const area of page.querySelectorAll('[data-workspace-area-trace]')){const [id,i]=area.dataset.workspaceAreaTrace.split(':'),points=wsBondsPoints(reference.lines[id][i]),base=area.dataset.workspaceBaseline;area.setAttribute('d',`${wsPath(points)}L${points.at(-1)[0]} ${base}L${points[0][0]} ${base}Z`);}
  for(const trace of page.querySelectorAll('[data-workspace-green]'))trace.setAttribute('d',wsPath(pnlPoints(reference.lines[trace.dataset.workspaceGreen],trace.dataset.workspaceTrend)));
 }

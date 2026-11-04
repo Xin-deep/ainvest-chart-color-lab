@@ -19,14 +19,14 @@ import { financialChartModules, financialModulesFor } from './data/financial-sha
 
 import { defaultFinancialBoard, validateFinancialBoard, renderFinancialExtras } from './scenes/financial-extras.js';
 
-const VERSION = '0.21.0';
+const VERSION = '0.22.0';
 const STORAGE_KEY = 'ainvest-palette-lab:v1';
 const scenes = [
   { id: 'aime', name: 'Aime 对话', en: 'Aime conversation', icon: 'chat' },
-  { id: 'financial', name: '财报分析', en: 'Financial analysis', icon: 'file' },
-  { id: 'custom', name: '自由看板', en: 'Custom dashboard', icon: 'grid' },
   { id: 'terminal', name: 'web', en: 'web', icon: 'chart' },
-  { id: 'workspace', name: 'Terminal', en: 'Terminal workspace', icon: 'grid' }
+  { id: 'workspace', name: 'Terminal', en: 'Terminal workspace', icon: 'grid' },
+  { id: 'financial', name: '财报分析', en: 'Financial analysis', icon: 'file' },
+  { id: 'custom', name: '自由看板', en: 'Custom dashboard', icon: 'grid' }
 ];
 const paths = {
   grip: '<path d="M6 9h12M6 15h12"/>',
@@ -59,7 +59,7 @@ const paths = {
 };
 const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.grid}</svg>`;
 const esc = text => String(text ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let state = { baseline: clone(presets[0]), draft: clone(presets[0]), scene: 'financial', theme: 'light', mode: 'draft', role: 'categorical', selected: 0, panel: 'palette', editorOpen: false, chartStyleOpen: false, editorModel: 'oklch', collapsed: innerWidth < 650, previewFullscreen: new URLSearchParams(location.search).get('preview') === 'fullscreen', saved: [], presetEdits: {}, pnlTrend: 'up', globalChartStyle: normalizeGlobalChartStyle(), checkSettings: defaultCheckSettings(), financialBoard: defaultFinancialBoard(), financialDensity: 'compact', customTemplate:'all', comparisonBoards:{}, customBoard: defaultCompactBoard(), aimeBoard: defaultAimeBoard() };
+let state = { baseline: clone(presets[0]), draft: clone(presets[0]), scene: 'financial', theme: 'light', role: 'categorical', selected: 0, panel: 'palette', editorOpen: false, chartStyleOpen: false, editorModel: 'oklch', collapsed: innerWidth < 650, previewFullscreen: new URLSearchParams(location.search).get('preview') === 'fullscreen', saved: [], presetEdits: {}, pnlTrend: 'up', globalChartStyle: normalizeGlobalChartStyle(), checkSettings: defaultCheckSettings(), financialBoard: defaultFinancialBoard(), financialDensity: 'compact', customTemplate:'all', comparisonBoards:{}, customBoard: defaultCompactBoard(), aimeBoard: defaultAimeBoard() };
 let storageAvailable = true, loaded = false;
 function restoreStoredPresetEdits(input) {
   const edits = restorePresetEdits(input, presets.map(p => p.id));
@@ -104,7 +104,7 @@ try {
   if (shared) {
     const baseline = dropRetiredBackgrounds(restorePalette(shared.baseline, presets)), draft = dropRetiredBackgrounds(restorePalette(shared.draft, presets));
     const aimeBoard = validateAimeBoard(shared.aimeBoard);
-    state = { ...state, baseline, draft, aimeBoard, scene: 'aime', theme: shared.theme === 'dark' ? 'dark' : 'light', mode: shared.mode === 'baseline' ? 'baseline' : 'draft', globalChartStyle: normalizeGlobalChartStyle(shared.globalChartStyle) };
+    state = { ...state, baseline, draft, aimeBoard, scene: 'aime', theme: shared.theme === 'dark' ? 'dark' : 'light', globalChartStyle: normalizeGlobalChartStyle(shared.globalChartStyle) };
     sharedPreviewLoaded = true;
     // A snapshot opened where it can be edited must not overwrite the local palette with the same id.
     const local = [...presets, ...state.saved].find(p => p.id === draft.id);
@@ -123,7 +123,7 @@ const requestedLiveId = liveParams.get('live') || liveParams.get('edit');
 const live = { role: requestedLiveId || mobileEntry ? 'viewer' : null, id: requestedLiveId, loading: !!requestedLiveId, ready: mobileEntry && !requestedLiveId, client: null, base: null, token: null, revision: 0, status: requestedLiveId ? '正在连接共享方案…' : '', error: '', pending: null, writing: false, lastJSON: '', timer: null, retry: null, stop: null, generation: 0, conflict: false, viewerTheme: null, viewerPalette: null, viewerScene: null, sharedPalettes: [], sharedPresetEdits: {} };
 const isLiveReadOnly = () => live.role === 'viewer' || live.loading;
 if (requestedLiveId) { state.scene = 'aime'; state.collapsed = true; state.previewFullscreen = false; }
-function liveSnapshot() { return { baseline: state.baseline, draft: state.draft, saved: state.saved, presetEdits: state.presetEdits, aimeBoard: state.aimeBoard, financialBoard: state.financialBoard, financialDensity: state.financialDensity, customBoard: state.customBoard, customTemplate: state.customTemplate, comparisonBoards: state.comparisonBoards, theme: state.theme, mode: state.mode, globalChartStyle: state.globalChartStyle }; }
+function liveSnapshot() { return { baseline: state.baseline, draft: state.draft, saved: state.saved, presetEdits: state.presetEdits, aimeBoard: state.aimeBoard, financialBoard: state.financialBoard, financialDensity: state.financialDensity, customBoard: state.customBoard, customTemplate: state.customTemplate, comparisonBoards: state.comparisonBoards, theme: state.theme, globalChartStyle: state.globalChartStyle }; }
 // Links created before layouts were shared leave them out, and that must not reset the local boards.
 function snapshotLayouts(snapshot) {
   const layouts = {};
@@ -138,7 +138,7 @@ function applyLiveSnapshot(snapshot) {
   const baseline = dropRetiredBackgrounds(restorePalette(snapshot.baseline, presets)), draft = dropRetiredBackgrounds(restorePalette(snapshot.draft, presets)), aimeBoard = validateAimeBoard(snapshot.aimeBoard);
   live.sharedPalettes = restoreSavedPalettes(snapshot.saved);
   live.sharedPresetEdits = restoreStoredPresetEdits(snapshot.presetEdits);
-  state = { ...state, ...snapshotLayouts(snapshot), baseline, draft, aimeBoard, scene: viewerSceneNow(), theme: snapshot.theme === 'dark' ? 'dark' : 'light', mode: snapshot.mode === 'baseline' ? 'baseline' : 'draft', globalChartStyle: normalizeGlobalChartStyle(snapshot.globalChartStyle), editorOpen: false };
+  state = { ...state, ...snapshotLayouts(snapshot), baseline, draft, aimeBoard, scene: viewerSceneNow(), theme: snapshot.theme === 'dark' ? 'dark' : 'light', globalChartStyle: normalizeGlobalChartStyle(snapshot.globalChartStyle), editorOpen: false };
   refreshUneditedPreset();
 }
 // The owner's theme is only the default on first open; afterwards each viewer keeps their own.
@@ -271,7 +271,7 @@ function loadLazyScene(id) {
   scene.pending = scene.load().then(module => { scene.module = module; }).catch(() => { scene.failed = true; }).finally(() => { scene.pending = null; if (state.scene === id) render(); });
 }
 const lazySceneHolder = id => `<div class="scene-loading">${lazyScenes[id].failed ? `<p>场景加载失败，请检查网络</p><button class="button" data-action="scene-retry" data-value="${id}">重试</button>` : '<p>正在加载场景…</p>'}</div>`;
-const sharedPalette = () => state.mode === 'baseline' ? state.baseline : state.draft;
+const sharedPalette = () => state.draft;
 const viewerOptions = () => [...presets.map(p => live.sharedPresetEdits[p.id] || p), ...live.sharedPalettes];
 // The tab that shows the owner's live colors, using the same rule as the workbench tabs.
 const ownerTabId = () => viewerOptions().some(p => p.id === state.draft.id) ? state.draft.id : 'current';
@@ -296,9 +296,9 @@ function toast(message) {
 function deletePalette(id) {
   const index=state.saved.findIndex(p=>p.id===id);if(index<0)return;
   const active=state.draft.id===id;
-  deletedScheme={palette:clone(state.saved[index]),index,snapshot:active?{baseline:clone(state.baseline),draft:clone(state.draft),mode:state.mode,role:state.role,selected:state.selected,editorOpen:state.editorOpen,history:history.map(clone),future:future.map(clone)}:null};
+  deletedScheme={palette:clone(state.saved[index]),index,snapshot:active?{baseline:clone(state.baseline),draft:clone(state.draft),role:state.role,selected:state.selected,editorOpen:state.editorOpen,history:history.map(clone),future:future.map(clone)}:null};
   state.saved.splice(index,1);
-  if(active){state.baseline=clone(presets[0]);state.draft=clone(state.presetEdits[presets[0].id]||presets[0]);state.mode='draft';state.role='categorical';state.selected=0;state.editorOpen=false;history=[];future=[];}
+  if(active){state.baseline=clone(presets[0]);state.draft=clone(state.presetEdits[presets[0].id]||presets[0]);state.role='categorical';state.selected=0;state.editorOpen=false;history=[];future=[];}
   persist();render();toast('已删除方案');
   const notice=document.querySelector('#toast'),undo=document.createElement('button');undo.textContent='撤销删除';undo.className='toast-undo';undo.addEventListener('click',undoDeletePalette);notice.append(undo);notice.classList.add('actionable');clearTimeout(toastTimer);toastTimer=setTimeout(()=>notice.classList.remove('visible'),8000);
 }
@@ -317,7 +317,7 @@ function changedCount() { return countColorChanges(state.baseline, state.draft);
 const onOpenPalette = snapshot => ({ ...clone(snapshot), id: state.draft.id, name: state.draft.name });
 function restoreOriginal() {
   remember(); const preset = presets.some(p => p.id === state.draft.id);
-  state.draft = onOpenPalette(state.baseline); state.mode = 'draft';
+  state.draft = onOpenPalette(state.baseline);
   toast(preset ? '已恢复原始色板，可撤销此操作' : '已恢复到打开时的颜色，可撤销此操作');
 }
 function globalChartStylePanel(){
@@ -346,7 +346,7 @@ function render() {
   loadLazyScene(state.scene);
   const scroll = document.querySelector('.side-scroll')?.scrollTop || 0;
   const paletteTabsScroll = document.querySelector('.palette-tabs')?.scrollTop || 0;
-  const viewerRowScroll = document.querySelector('.aime-mobile .aime-quick-actions')?.scrollLeft || 0;
+  const viewerRowScroll = [...document.querySelectorAll('.aime-viewer-palettes')].map(row => row.scrollLeft);
   const oldCanvas = document.querySelector('#preview-canvas');
   const oldSceneScroller = oldCanvas?.querySelector('.financial-content-frame, .terminal-content-frame, .workspace-terminal-scroll, .compact-board-scroll, .aime-content-scroll') || oldCanvas;
   const canvasScroll = { top: oldCanvas?.dataset.scene===state.scene ? oldSceneScroller?.scrollTop || 0 : 0, left: oldSceneScroller?.scrollLeft || 0, sceneHeight: oldSceneScroller?.scrollHeight || 0 };
@@ -370,13 +370,12 @@ function render() {
         <div class="sidebar-header">
           <div class="sidebar-title"><div class="workbench-heading"><span>颜色工作台</span><small>Palette Lab <span class="mono">v${VERSION}</span></small></div><div class="workbench-history"><button class="icon-button" data-action="undo" title="撤销（⌘/Ctrl Z）" aria-label="撤销" ${!history.length ? 'disabled' : ''}>${icon('undo')}</button><button class="icon-button" data-action="redo" title="重做（⌘/Ctrl Shift Z）" aria-label="重做" ${!future.length ? 'disabled' : ''}>${icon('redo')}</button><button class="icon-button" data-action="collapse" title="收起颜色工作台" aria-label="收起颜色工作台" aria-expanded="true">${icon('panel')}</button></div></div>
           ${mobileEntry ? '' : `<nav class="workbench-scenes" aria-label="产品使用场景">${scenes.map(s => `<button class="scene-tab ${s.id === state.scene ? 'active' : ''}" data-action="scene" data-value="${s.id}" aria-current="${s.id === state.scene ? 'page' : 'false'}">${s.name}</button>`).join('')}</nav>`}
-          <div class="workbench-controls">${themeSegment()}<div class="segment compare-switch" aria-label="调整前后对比"><button data-action="mode" data-value="baseline" class="${state.mode === 'baseline' ? 'active' : ''}" aria-pressed="${state.mode === 'baseline'}">A 原始</button><button data-action="mode" data-value="draft" class="${state.mode === 'draft' ? 'active' : ''}" aria-pressed="${state.mode === 'draft'}">B 调整后</button></div></div>
+          <div class="workbench-controls">${themeSegment()}</div>
           <div class="workbench-actions"><button class="button primary" data-action="save" aria-label="另存为新方案">${icon('save')}另存为</button></div>
           <button class="button mobile-share-button" data-action="share-mobile">分享预览</button>
           ${paletteTabs()}
           <div class="sidebar-tabs" role="tablist" aria-label="颜色操作"><button role="tab" aria-selected="${state.panel === 'palette'}" class="${state.panel === 'palette' ? 'active' : ''}" data-action="panel" data-value="palette">${icon('sliders')}编辑色板</button><button role="tab" aria-selected="${state.panel === 'import'}" class="${state.panel === 'import' ? 'active' : ''}" data-action="panel" data-value="import">${icon('upload')}导入颜色</button><button role="tab" aria-selected="${state.panel === 'check'}" class="${state.panel === 'check' ? 'active' : ''}" data-action="panel" data-value="check">色值检验</button></div>
         </div>
-        ${state.mode === 'baseline' && state.panel === 'palette' ? `<div class="baseline-notice">${icon('lock')}正在查看原始基线 · 切换 B 后可调色</div>` : ''}
         <div class="side-scroll">${state.panel === 'palette' ? moduleSettingsPanel() + palettePanel() : state.panel === 'check' ? renderColorChecks(shownPalette(),state.theme,state.role,state.checkSettings) : importPanel()}</div>
         <div class="sidebar-footer"><span id="save-status">${state.panel === 'import' ? (live.role==='owner'?'应用导入后将同步至共享方案':'本地解析 · 文件内容不会上传') : storageAvailable ? `已自动保存 · ${changedCount()} 处颜色修改` : '浏览器存储不可用，请导出保存'}</span></div>
       </aside>`}
@@ -385,17 +384,15 @@ function render() {
   document.querySelector('.side-scroll').scrollTop = scroll;
   const tabStrip = document.querySelector('.palette-tabs'), activeTab = tabStrip.querySelector('[aria-selected="true"]')?.closest('.palette-tab-item');
   tabStrip.scrollTop = paletteTabsScroll;
-  const viewerRow = document.querySelector('.aime-mobile .aime-quick-actions');
-  if (viewerRow) {
-    viewerRow.scrollLeft = viewerRowScroll;
-    // Keep the chosen palette clear of the theme button, which stays pinned at the left of the row.
-    const chip = viewerRow.querySelector('.aime-viewer-palettes .active');
+  document.querySelectorAll('.aime-viewer-palettes').forEach((row, i) => {
+    row.scrollLeft = viewerRowScroll[i] || 0;
+    const chip = row.querySelector('.active');
     if (chip) {
-      const box = chip.getBoundingClientRect(), row = viewerRow.getBoundingClientRect(), pinned = viewerRow.querySelector('.aime-row-pinned').getBoundingClientRect().right;
-      if (box.left < pinned) viewerRow.scrollLeft -= pinned - box.left + 6;
-      else if (box.right > row.right) viewerRow.scrollLeft += box.right - row.right;
+      const end = chip.offsetLeft + chip.offsetWidth - row.clientWidth;
+      if (row.scrollLeft > chip.offsetLeft) row.scrollLeft = chip.offsetLeft;
+      else if (row.scrollLeft < end) row.scrollLeft = end;
     }
-  }
+  });
   if (activeTab && (activeTab.offsetTop < tabStrip.scrollTop || activeTab.offsetTop + activeTab.offsetHeight > tabStrip.scrollTop + tabStrip.clientHeight)) tabStrip.scrollTop = activeTab.offsetTop - 3;
   const editor = document.querySelector(".color-editor");
   if (editor) document.querySelector(".sidebar-footer").before(editor);
@@ -425,19 +422,24 @@ const themeSegment = () => `<div class="segment" aria-label="预览主题"><butt
 // Computers get the choices a phone has plus the scenes; nothing here edits or saves the shared plan.
 function viewerToolbar() {
   const { options, selected } = viewerChoices();
-  return `<aside class="sidebar viewer-toolbar" id="color-workbench" aria-label="查看工具"><div class="sidebar-header"><div class="sidebar-title"><div class="workbench-heading"><span>查看配色</span><small>只读，你的选择不会影响原方案</small></div><div class="workbench-history"><button class="icon-button" data-action="viewer-collapse" title="收起工具栏" aria-label="收起工具栏" aria-expanded="true">${icon('panel')}</button></div></div><nav class="workbench-scenes" aria-label="产品使用场景">${scenes.map(s => `<button class="scene-tab ${s.id === state.scene ? 'active' : ''}" data-action="viewer-scene" data-value="${s.id}" aria-current="${s.id === state.scene ? 'page' : 'false'}">${s.name}</button>`).join('')}</nav><div class="workbench-controls">${themeSegment()}</div></div><div class="side-scroll"><div class="palette-tab-heading"><span>色板方案</span></div><div class="palette-tabs" role="tablist" aria-label="色板方案">${options.map(p => `<div class="palette-tab-item"><button role="tab" data-action="viewer-palette" data-value="${esc(p.id)}" aria-selected="${p.id === selected}" tabindex="${p.id === selected ? 0 : -1}" class="palette-tab ${p.id === selected ? 'active' : ''}" title="${esc(p.name)}"><i style="background:${p.themes[state.theme].categorical[0].hex}"></i><span>${esc(p.id === 'current' ? p.name : paletteLabel(p))}</span></button></div>`).join('')}</div></div><div class="sidebar-footer"><span class="live-sync-status">${esc(live.status)}</span></div></aside>`;
+  return `<aside class="sidebar viewer-toolbar" id="color-workbench" aria-label="查看工具"><div class="sidebar-header"><div class="sidebar-title"><div class="workbench-heading"><span>查看配色</span><small>只读，你的选择不会影响原方案</small></div><div class="workbench-history"><button class="icon-button" data-action="viewer-collapse" title="收起工具栏" aria-label="收起工具栏" aria-expanded="true">${icon('panel')}</button></div></div><nav class="workbench-scenes" aria-label="产品使用场景">${scenes.map(s => `<button class="scene-tab ${s.id === state.scene ? 'active' : ''}" data-action="viewer-scene" data-value="${s.id}" aria-current="${s.id === state.scene ? 'page' : 'false'}">${s.name}</button>`).join('')}</nav><div class="workbench-controls">${themeSegment()}</div></div><div class="side-scroll"><div class="palette-tab-heading"><span>色板方案</span></div><div class="palette-tabs" role="tablist" aria-label="色板方案">${paletteGroups(options, p => `<div class="palette-tab-item"><button role="tab" data-action="viewer-palette" data-value="${esc(p.id)}" aria-selected="${p.id === selected}" tabindex="${p.id === selected ? 0 : -1}" class="palette-tab ${p.id === selected ? 'active' : ''}" title="${esc(p.name)}"><i style="background:${p.themes[state.theme].categorical[0].hex}"></i><span>${esc(p.id === 'current' ? p.name : paletteLabel(p))}</span></button></div>`)}</div></div><div class="sidebar-footer"><span class="live-sync-status">${esc(live.status)}</span></div></aside>`;
 }
+// Presets on the first row, the user's own schemes on a second one when there are any.
 function viewerPaletteBar() {
   const { options, selected } = viewerChoices();
-  return `<div class="aime-viewer-palettes" role="group" aria-label="切换色板">${options.map(p => `<button data-action="viewer-palette" data-value="${esc(p.id)}" aria-pressed="${p.id === selected}" class="${p.id === selected ? 'active' : ''}"><i style="background:${p.themes[state.theme].categorical[0].hex}"></i>${esc(p.id === 'current' ? p.name : paletteLabel(p))}</button>`).join('')}</div>`;
+  const chip = p => `<button data-action="viewer-palette" data-value="${esc(p.id)}" aria-pressed="${p.id === selected}" class="${p.id === selected ? 'active' : ''}"><i style="background:${p.themes[state.theme].categorical[0].hex}"></i>${esc(p.id === 'current' ? p.name : paletteLabel(p))}</button>`;
+  const row = (list, label) => list.length ? `<div class="aime-viewer-palettes" role="group" aria-label="${label}">${list.map(chip).join('')}</div>` : '';
+  return row(options.slice(0, presets.length), '切换默认色板') + row(options.slice(presets.length), '切换修改的色板');
 }
 const editedMark = '<em class="palette-tab-edited">已修改</em>';
+// Presets first; everything below the line is a scheme of the user's own.
+const paletteGroups = (options, item) => { const items = options.map(item); if (options.length > presets.length) items.splice(presets.length, 0, '<div class="palette-divider" role="separator"></div>'); return items.join(''); };
 function paletteTabs() {
   const options = [...presets, ...state.saved].map(p => p.id === state.draft.id ? state.draft : state.presetEdits[p.id] || p);
   const known = options.some(p => p.id === state.draft.id);
   if (!known) options.push({...state.draft, id:'current', name:paletteLabel(state.draft)});
   const selected = known ? state.draft.id : 'current';
-  return `<div class="palette-tab-heading"><span>色板方案</span><div class="palette-heading-actions">${state.saved.some(p=>p.id===state.draft.id)?`<button class="text-button" data-action="rename-palette" aria-label="重命名当前色板">重命名</button>`:''}<button class="text-button" data-action="panel" data-value="import">＋ 导入</button></div></div><div class="palette-tabs" role="tablist" aria-label="色板方案">${options.map(p=>`<div class="palette-tab-item ${state.saved.some(v=>v.id===p.id)?'can-delete':''}"><button role="tab" data-action="palette-tab" data-value="${esc(p.id)}" aria-selected="${p.id===selected}" tabindex="${p.id===selected?0:-1}" class="palette-tab ${p.id===selected?'active':''}" title="${esc(p.name)}"><i style="background:${p.themes[state.theme].categorical[0].hex}"></i><span>${esc(p.id==='current'?p.name:paletteLabel(p))}</span>${state.presetEdits[p.id]?editedMark:''}</button>${state.saved.some(v=>v.id===p.id)?`<button class="palette-tab-delete" data-action="delete-palette" data-value="${esc(p.id)}" aria-label="删除方案：${esc(p.name)}" title="删除方案">${icon('close')}</button>`:''}</div>`).join('')}</div>`;
+  return `<div class="palette-tab-heading"><span>色板方案</span><div class="palette-heading-actions">${state.saved.some(p=>p.id===state.draft.id)?`<button class="text-button" data-action="rename-palette" aria-label="重命名当前色板">重命名</button>`:''}<button class="text-button" data-action="panel" data-value="import">＋ 导入</button></div></div><div class="palette-tabs" role="tablist" aria-label="色板方案">${paletteGroups(options,p=>`<div class="palette-tab-item ${state.saved.some(v=>v.id===p.id)?'can-delete':''}"><button role="tab" data-action="palette-tab" data-value="${esc(p.id)}" aria-selected="${p.id===selected}" tabindex="${p.id===selected?0:-1}" class="palette-tab ${p.id===selected?'active':''}" title="${esc(p.name)}"><i style="background:${p.themes[state.theme].categorical[0].hex}"></i><span>${esc(p.id==='current'?p.name:paletteLabel(p))}</span>${state.presetEdits[p.id]?editedMark:''}</button>${state.saved.some(v=>v.id===p.id)?`<button class="palette-tab-delete" data-action="delete-palette" data-value="${esc(p.id)}" aria-label="删除方案：${esc(p.name)}" title="删除方案">${icon('close')}</button>`:''}</div>`)}</div>`;
 }
 function compactOklch(hex){
   const value=hexToOklch(hex);
@@ -450,10 +452,10 @@ function oklchDetails(hex){
 function palettePanel() {
   const p = shownPalette(), colors = p.themes[state.theme][state.role], report=buildPaletteCheckReport(p,state.theme,state.role,state.checkSettings);
   state.selected = Math.min(state.selected, colors.length - 1);
-  const color = colors[state.selected], base = shownPalette(state.baseline).themes[state.theme][state.role][state.selected], hsv = hexToHsv(color.hex), readonly = state.mode === 'baseline', editable = seriesRoles.includes(state.role) && !readonly, hsb = state.editorModel === 'hsb';
-  return `<section class="panel-section"><div class="section-heading"><span class="section-label">Palette / 当前色板</span><button class="text-button" data-action="reset" ${!changedCount() ? 'disabled' : ''}>恢复原始</button></div><div class="active-palette-name">${esc(p.name)}</div><div class="preset-source">${esc(p.source)}</div>${!p.availableThemes.includes(state.theme) ? '<div class="theme-warning">当前主题为实验复用色值，未经竞品来源确认。</div>' : ''}<div class="reference-caption">${icon('lock')}A 为冻结基线，B 为当前调整</div></section>
-    <section class="panel-section"><div class="section-heading"><span class="section-label">Colors / 颜色角色</span><span class="mono muted" style="font-size:9px">${state.theme === 'light' ? 'LIGHT' : 'DARK'}</span></div><div class="role-tabs" aria-label="颜色角色">${Object.entries(roles).map(([id, name]) => `<button class="${state.role === id ? 'active' : ''}" data-action="role" data-value="${id}" aria-pressed="${state.role === id}">${name}<small>${p.themes[state.theme][id].length}</small></button>`).join('')}</div><div class="color-list">${colors.map((c, i) => `<div class="color-item">${editable && colors.length > 1 ? `<button class="color-drag" data-color-drag="${i}" aria-label="调整「${esc(c.name)}」的顺序，可拖动或按上下方向键" title="拖动调整顺序">${icon('grip')}</button>` : ''}<button class="color-row ${state.editorOpen && state.selected === i ? 'selected' : ''}" data-action="color" data-value="${i}" aria-label="${esc(c.name)} ${c.hex}" aria-pressed="${state.editorOpen && state.selected === i}" aria-expanded="${state.editorOpen && state.selected === i}"><span class="color-index mono">${String(i + 1).padStart(2, '0')}</span><i class="swatch" style="background:${c.hex}" data-swatch="${i}"></i><span class="color-description"><span class="color-main"><span class="color-name">${esc(c.name)}</span><span class="color-value mono" data-color-value="${i}">${c.hex}</span></span><span class="color-oklch mono" data-oklch="${i}">${compactOklch(c.hex)}</span></span>${state.mode === 'draft' && c.hex !== state.baseline.themes[state.theme][state.role][i]?.hex ? '<i class="changed-dot"></i>' : ''}${state.editorOpen && state.selected === i ? icon('sliders') : ''}</button>${editable && colors.length > 1 ? `<button class="color-remove" data-action="color-remove" data-value="${i}" aria-label="删除「${esc(c.name)}」" title="删除颜色">${icon('close')}</button>` : ''}</div>`).join('')}</div>${editable && colors.length < 64 ? '<button class="text-button color-add" data-action="color-add">＋ 添加颜色</button>' : ''}<div class="colors-note">${icon('info')}${state.role === 'line' ? '只用于折柱图里的折线，柱子用分类色；顺序和增删同时作用于浅色、深色' : state.role === 'categorical' ? '顺序和增删同时作用于浅色、深色；色值分主题修改' : '仅修改当前角色，其他用途保持独立'}</div></section>
-    ${state.editorOpen ? `<section class="panel-section color-editor"><div class="editor-heading"><span class="editor-name"><span>编辑</span>${esc(color.name)}</span><div class="editor-tools"><div class="segment editor-model" aria-label="调色模式">${[['oklch', 'OKLCH'], ['hsb', 'HSB']].map(([id, name]) => `<button data-action="editor-model" data-value="${id}" class="${state.editorModel === id ? 'active' : ''}" aria-pressed="${state.editorModel === id}">${name}</button>`).join('')}</div>${editable && colors.length > 1 ? `<button class="icon-button" data-action="color-remove" data-value="${state.selected}" aria-label="删除此颜色" title="删除此颜色">${icon('trash')}</button>` : ''}<button class="icon-button" data-action="editor-close" aria-label="收起颜色编辑器">${icon('close')}</button></div></div><div class="color-inputs"><label class="picker-wrap" style="background:${color.hex}" title="打开颜色选择器"><input type="color" id="native-color" value="${color.hex}" aria-label="${esc(color.name)}颜色选择器" ${readonly ? 'disabled' : ''}></label><label class="hex-field"><span>HEX</span><input class="mono" id="hex-input" value="${color.hex}" maxlength="64" aria-label="色值，支持 HEX、RGB、HSL" spellcheck="false" ${readonly ? 'disabled' : ''}></label><button class="icon-button" data-action="copy-color" title="复制色值" aria-label="复制色值">${icon('copy')}</button></div><div class="colorjs-picker-shell" ${hsb ? '' : 'data-colorjs-picker'}>${hsb ? '' : `<color-picker space="oklch" color="${color.hex}" gamut="none" aria-label="OKLCH 颜色选择器"><span slot="color-space" class="picker-space-name">OKLCH</span></color-picker>`}<div class="hsb-fallback">${['H 色相', 'S 饱和', 'B 亮度'].map((label, i) => `<div class="slider-row"><label for="slider-${i}" title="${label}">${label[0]}</label><input id="slider-${i}" data-hsv="${i}" type="range" min="0" max="${i === 0 ? 359 : 100}" step="1" value="${Math.round(hsv[i])}" aria-label="${label}" ${readonly ? 'disabled' : ''} style="background:${i === 0 ? 'linear-gradient(to right,#ff7777,#dddd55,#55cc88,#55cddd,#7777ee,#dd77dd,#ff7777)' : i === 1 ? `linear-gradient(to right,#ddd,${hsvToHex(hsv[0], 100, 100)})` : `linear-gradient(to right,#222,${hsvToHex(hsv[0], hsv[1], 100)})`}"><span class="hsv-number mono"><input id="output-${i}" data-hsv-number="${i}" type="number" min="0" max="${i === 0 ? 359 : 100}" step="1" value="${Math.round(hsv[i])}" aria-label="${label}数值" ${readonly ? 'disabled' : ''}><span aria-hidden="true">${i === 0 ? '°' : '%'}</span></span></div>`).join('')}</div>${hsb ? '' : '<p class="picker-status" data-picker-status role="status">正在加载 Color.js 选色器…</p>'}</div><div class="oklch-readout" id="oklch-readout">${oklchDetails(color.hex)}<div class="color-check-badges" data-color-checks="${state.selected}">${renderColorCheckBadges(report.entries[state.selected],report)}</div></div><div class="mini-diff"><i style="background:${base?.hex || '#FFFFFF'}"></i><span class="mono">${base?.hex || '新增'}</span>${icon('arrow')}<i id="after-swatch" style="background:${color.hex}"></i><span id="after-hex" class="mono">${color.hex}</span></div><div class="editor-footnote">修改应用于${state.theme === 'light' ? '浅色' : '深色'}主题的「${roles[state.role]}」。<br>RGB <span class="mono" id="rgb-value">${rgbText(color.hex)}</span></div></section>` : ''}`;
+  const color = colors[state.selected], base = shownPalette(state.baseline).themes[state.theme][state.role][state.selected], hsv = hexToHsv(color.hex), editable = seriesRoles.includes(state.role), hsb = state.editorModel === 'hsb';
+  return `<section class="panel-section"><div class="section-heading"><span class="section-label">Palette / 当前色板</span><button class="text-button" data-action="reset" ${!changedCount() ? 'disabled' : ''}>恢复原始</button></div><div class="active-palette-name">${esc(p.name)}</div><div class="preset-source">${esc(p.source)}</div>${!p.availableThemes.includes(state.theme) ? '<div class="theme-warning">当前主题为实验复用色值，未经竞品来源确认。</div>' : ''}</section>
+    <section class="panel-section"><div class="section-heading"><span class="section-label">Colors / 颜色角色</span><span class="mono muted" style="font-size:9px">${state.theme === 'light' ? 'LIGHT' : 'DARK'}</span></div><div class="role-tabs" aria-label="颜色角色">${Object.entries(roles).map(([id, name]) => `<button class="${state.role === id ? 'active' : ''}" data-action="role" data-value="${id}" aria-pressed="${state.role === id}">${name}<small>${p.themes[state.theme][id].length}</small></button>`).join('')}</div><div class="color-list">${colors.map((c, i) => `<div class="color-item">${editable && colors.length > 1 ? `<button class="color-drag" data-color-drag="${i}" aria-label="调整「${esc(c.name)}」的顺序，可拖动或按上下方向键" title="拖动调整顺序">${icon('grip')}</button>` : ''}<button class="color-row ${state.editorOpen && state.selected === i ? 'selected' : ''}" data-action="color" data-value="${i}" aria-label="${esc(c.name)} ${c.hex}" aria-pressed="${state.editorOpen && state.selected === i}" aria-expanded="${state.editorOpen && state.selected === i}"><span class="color-index mono">${String(i + 1).padStart(2, '0')}</span><i class="swatch" style="background:${c.hex}" data-swatch="${i}"></i><span class="color-description"><span class="color-main"><span class="color-name">${esc(c.name)}</span><span class="color-value mono" data-color-value="${i}">${c.hex}</span></span><span class="color-oklch mono" data-oklch="${i}">${compactOklch(c.hex)}</span></span>${c.hex !== state.baseline.themes[state.theme][state.role][i]?.hex ? '<i class="changed-dot"></i>' : ''}${state.editorOpen && state.selected === i ? icon('sliders') : ''}</button>${editable && colors.length > 1 ? `<button class="color-remove" data-action="color-remove" data-value="${i}" aria-label="删除「${esc(c.name)}」" title="删除颜色">${icon('close')}</button>` : ''}</div>`).join('')}</div>${editable && colors.length < 64 ? '<button class="text-button color-add" data-action="color-add">＋ 添加颜色</button>' : ''}<div class="colors-note">${icon('info')}${state.role === 'line' ? '只用于折柱图里的折线，柱子用分类色；顺序和增删同时作用于浅色、深色' : state.role === 'categorical' ? '顺序和增删同时作用于浅色、深色；色值分主题修改' : '仅修改当前角色，其他用途保持独立'}</div></section>
+    ${state.editorOpen ? `<section class="panel-section color-editor"><div class="editor-heading"><span class="editor-name"><span>编辑</span>${esc(color.name)}</span><div class="editor-tools"><div class="segment editor-model" aria-label="调色模式">${[['oklch', 'OKLCH'], ['hsb', 'HSB']].map(([id, name]) => `<button data-action="editor-model" data-value="${id}" class="${state.editorModel === id ? 'active' : ''}" aria-pressed="${state.editorModel === id}">${name}</button>`).join('')}</div>${editable && colors.length > 1 ? `<button class="icon-button" data-action="color-remove" data-value="${state.selected}" aria-label="删除此颜色" title="删除此颜色">${icon('trash')}</button>` : ''}<button class="icon-button" data-action="editor-close" aria-label="收起颜色编辑器">${icon('close')}</button></div></div><div class="color-inputs"><label class="picker-wrap" style="background:${color.hex}" title="打开颜色选择器"><input type="color" id="native-color" value="${color.hex}" aria-label="${esc(color.name)}颜色选择器"></label><label class="hex-field"><span>HEX</span><input class="mono" id="hex-input" value="${color.hex}" maxlength="64" aria-label="色值，支持 HEX、RGB、HSL" spellcheck="false"></label><button class="icon-button" data-action="copy-color" title="复制色值" aria-label="复制色值">${icon('copy')}</button></div><div class="colorjs-picker-shell" ${hsb ? '' : 'data-colorjs-picker'}>${hsb ? '' : `<color-picker space="oklch" color="${color.hex}" gamut="none" aria-label="OKLCH 颜色选择器"><span slot="color-space" class="picker-space-name">OKLCH</span></color-picker>`}<div class="hsb-fallback">${['H 色相', 'S 饱和', 'B 亮度'].map((label, i) => `<div class="slider-row"><label for="slider-${i}" title="${label}">${label[0]}</label><input id="slider-${i}" data-hsv="${i}" type="range" min="0" max="${i === 0 ? 359 : 100}" step="1" value="${Math.round(hsv[i])}" aria-label="${label}" style="background:${i === 0 ? 'linear-gradient(to right,#ff7777,#dddd55,#55cc88,#55cddd,#7777ee,#dd77dd,#ff7777)' : i === 1 ? `linear-gradient(to right,#ddd,${hsvToHex(hsv[0], 100, 100)})` : `linear-gradient(to right,#222,${hsvToHex(hsv[0], hsv[1], 100)})`}"><span class="hsv-number mono"><input id="output-${i}" data-hsv-number="${i}" type="number" min="0" max="${i === 0 ? 359 : 100}" step="1" value="${Math.round(hsv[i])}" aria-label="${label}数值"><span aria-hidden="true">${i === 0 ? '°' : '%'}</span></span></div>`).join('')}</div>${hsb ? '' : '<p class="picker-status" data-picker-status role="status">正在加载 Color.js 选色器…</p>'}</div><div class="oklch-readout" id="oklch-readout">${oklchDetails(color.hex)}<div class="color-check-badges" data-color-checks="${state.selected}">${renderColorCheckBadges(report.entries[state.selected],report)}</div></div><div class="mini-diff"><i style="background:${base?.hex || '#FFFFFF'}"></i><span class="mono">${base?.hex || '新增'}</span>${icon('arrow')}<i id="after-swatch" style="background:${color.hex}"></i><span id="after-hex" class="mono">${color.hex}</span></div><div class="editor-footnote">修改应用于${state.theme === 'light' ? '浅色' : '深色'}主题的「${roles[state.role]}」。<br>RGB <span class="mono" id="rgb-value">${rgbText(color.hex)}</span></div></section>` : ''}`;
 }
 let importText = '', importError = '', importInputMode = 'text', importLightText = '', importDarkText = '', importName = '';
 function importPanel() {
@@ -492,11 +494,10 @@ function adoptDraft() {
   state.saved = state.saved.slice(-30);
 }
 function applyPalette(p) {
-  writeBackDraft(state, presets); adoptDraft(); state.editorOpen = false; state.draft = clone(state.presetEdits[p.id] || p); state.baseline = clone(p); state.role = 'categorical'; state.selected = 0; state.mode = 'draft'; history = []; future = []; persist(); render();
+  writeBackDraft(state, presets); adoptDraft(); state.editorOpen = false; state.draft = clone(state.presetEdits[p.id] || p); state.baseline = clone(p); state.role = 'categorical'; state.selected = 0; history = []; future = []; persist(); render();
 }
 function setColor(value, record = true, repaint = true) {
   if (isLiveReadOnly()) return;
-  if (state.mode === 'baseline') return;
   const hex = normalizeColor(value);
   if (hex === selectedColor().hex || hex === shownPalette().themes[state.theme][state.role][state.selected].hex) return;
   if (record) remember(); selectedColor().hex = hex; persist(); if (repaint) render(); else liveColor(hex);
@@ -534,7 +535,7 @@ function bindInputs() {
   const pickerShell=document.querySelector('[data-colorjs-picker]');
   let pickerRecorded=false;
   if(pickerShell)bindColorJsPicker(pickerShell,{
-    hex:shownPalette().themes[state.theme][state.role][state.selected].hex,readonly:state.mode==='baseline',
+    hex:shownPalette().themes[state.theme][state.role][state.selected].hex,
     onBegin:()=>{editorTransaction=clone(state.draft);pickerRecorded=false;},
     onInput:hex=>{
       if(hex!==selectedColor().hex&&!pickerRecorded){remember(editorTransaction);pickerRecorded=true;}
@@ -595,7 +596,7 @@ function bindInputs() {
     const index = Number(numberInput.dataset.hsvNumber);
     let numberEdited = false;
     const applyNumber = (commit = false) => {
-      if (state.mode === 'baseline' || !numberEdited) return;
+      if (!numberEdited) return;
       const parsed = numberInput.value.trim() === '' ? NaN : Number(numberInput.value);
       if (!Number.isFinite(parsed)) { if (commit) numberInput.value = sliders[index].value; return; }
       const value = Math.round(Math.min(Number(numberInput.max), Math.max(0, parsed)));
@@ -747,11 +748,11 @@ app.addEventListener('click', async e => {
   if (action === 'delete-palette') { deletePalette(value); return; }
   if (action === 'editor-close') state.editorOpen = false;
   if (action === 'editor-model') state.editorModel = value === 'hsb' ? 'hsb' : 'oklch';
-  if (action === 'color-add' && state.mode === 'draft' && seriesRoles.includes(state.role)) {
+  if (action === 'color-add' && seriesRoles.includes(state.role)) {
     remember(); addSeriesColor(state.draft, state.role);
     state.selected = state.draft.themes[state.theme][state.role].length - 1; state.editorOpen = true;
   }
-  if (action === 'color-remove' && state.mode === 'draft' && seriesRoles.includes(state.role)) {
+  if (action === 'color-remove' && seriesRoles.includes(state.role)) {
     const index = Number(value);
     remember(); removeSeriesColor(state.draft, index, state.role);
     if (state.selected === index) state.editorOpen = false;
@@ -788,13 +789,12 @@ app.addEventListener('click', async e => {
   if (action === 'module-duplicate') { const selected = activeModuleBoard().modules.find(m => m.id === activeModuleBoard().selected); if(selected && activeModuleBoard().modules.length < 60) { const added = {...selected, id:crypto.randomUUID()}; activeModuleBoard().modules.splice(activeModuleBoard().modules.indexOf(selected)+1,0,added); activeModuleBoard().selected=added.id; } }
   if (action === 'module-remove') { activeModuleBoard().modules=activeModuleBoard().modules.filter(m=>m.id!==activeModuleBoard().selected); activeModuleBoard().selected=activeModuleBoard().modules.find(m=>!m.hidden)?.id; }
   if (action === 'theme') { state.theme = value; state.editorOpen = false; }
-  if (action === 'mode') state.mode = value;
   if (action === 'collapse') state.collapsed = !state.collapsed;
   if (action === 'panel') { state.panel = value; state.editorOpen = false; }
   if (action === 'role') { state.role = value; state.selected = 0; state.editorOpen = false; }
   if (action === 'color') { state.selected = Number(value); state.editorOpen = true; }
-  if (action === 'undo' && history.length) { future.push(clone(state.draft)); state.draft = onOpenPalette(history.pop()); state.mode = 'draft'; }
-  if (action === 'redo' && future.length) { history.push(clone(state.draft)); state.draft = onOpenPalette(future.pop()); state.mode = 'draft'; }
+  if (action === 'undo' && history.length) { future.push(clone(state.draft)); state.draft = onOpenPalette(history.pop()); }
+  if (action === 'redo' && future.length) { history.push(clone(state.draft)); state.draft = onOpenPalette(future.pop()); }
   if (action === 'reset' && changedCount()) restoreOriginal();
   if (action === 'copy-oklch') {
     try { await navigator.clipboard.writeText(oklchCss(hexToOklch(shownPalette().themes[state.theme][state.role][state.selected].hex)));toast('已复制 OKLCH 色值'); } catch {toast('无法访问剪贴板，请从 OKLCH 文本手动复制');}
@@ -809,7 +809,7 @@ app.addEventListener('click', async e => {
     openModal(`${modalHead('另存为新方案')}<p>把当前颜色存成一个新方案并切换过去。方案里的修改会自动保存，不需要再点保存。</p><label for="save-name">方案名称</label><input id="save-name" class="modal-input" maxlength="80" value="${esc(state.draft.name + ' · 调整版')}"><div class="modal-actions"><button class="button" data-modal-action="close">取消</button><button class="button primary" data-modal-action="save">另存为</button></div>`); return;
   }
   if (action === 'export') {
-    openModal(`${modalHead('导出与分享')}<p>导出的 JSON 可在其他设备上导入。完整实验文件可以复现本次比较条件。</p><button class="export-choice" data-modal-action="export-palette">${icon('file')}<span><strong>导出当前色板</strong><small>颜色角色、浅深主题、来源信息</small></span></button><button class="export-choice" data-modal-action="export-session">${icon('copy')}<span><strong>导出完整实验</strong><small>A/B 色板、当前场景、主题与工具版本</small></span></button><div class="editor-footnote">当前查看 ${state.mode === 'baseline' ? 'A · 原始基线' : 'B · 调整后色板'}；色板导出与当前查看版本一致。</div>`); return;
+    openModal(`${modalHead('导出与分享')}<p>导出的 JSON 可在其他设备上导入。完整实验文件可以复现本次比较条件。</p><button class="export-choice" data-modal-action="export-palette">${icon('file')}<span><strong>导出当前色板</strong><small>颜色角色、浅深主题、来源信息</small></span></button><button class="export-choice" data-modal-action="export-session">${icon('copy')}<span><strong>导出完整实验</strong><small>色板、当前场景、主题与工具版本</small></span></button>`); return;
   }
   if (action === 'import-mode' && ['text','code'].includes(value)) { importInputMode=value;pendingImport=null;importError=''; }
   if (action === 'example' && importInputMode === 'text') { importLightText='#265FFC #38D1FF #F564B9 #733ED6 #00CCC3 #273D8F #FF7040';importDarkText='';pendingImport=null;importError=''; }
@@ -820,7 +820,7 @@ app.addEventListener('click', async e => {
       const s = pendingImport.session; state.customTemplate=[...comparisonTemplates.map(t=>t.id),'free'].includes(s.customTemplate)?s.customTemplate:'all';state.comparisonBoards=validateComparisonBoards(s.comparisonBoards); state.globalChartStyle=normalizeGlobalChartStyle(s.globalChartStyle); state.checkSettings=normalizeCheckSettings(s.checkSettings); state.financialBoard = validateFinancialBoard(s.financialBoard); state.financialDensity = s.financialDensity === 'standard' ? 'standard' : 'compact'; if (s.customBoard) state.customBoard = validateCompactBoard(s.customBoard); if(s.aimeBoard)state.aimeBoard=validateAimeBoard(s.aimeBoard); writeBackDraft(state, presets); adoptDraft(); state.baseline = clone(s.baseline); state.draft = clone(s.draft); state.draft.id = crypto.randomUUID(); state.baseline.id = state.draft.id;
       state.scene = mobileEntry ? 'aime' : scenes.some(v => v.id === s.scene) ? s.scene : 'financial'; state.theme = ['light', 'dark'].includes(s.theme) ? s.theme : 'light'; history = []; future = [];
     } else { const p = clone(pendingImport.candidates[importedIndex]); p.name = importName.trim() || p.name; p.id = crypto.randomUUID(); const sourceName=p.name;let suffix=2;while([...presets,...state.saved].some(v=>v.name===p.name))p.name=sourceName+' '+suffix++;state.saved.push(clone(p)); state.saved = state.saved.slice(-30); applyPalette(p); }
-    state.mode = 'draft'; state.panel = 'palette'; state.editorOpen = false; state.role = 'categorical'; state.selected = 0; pendingImport = null; toast('已导入，可以开始调整颜色');
+    state.panel = 'palette'; state.editorOpen = false; state.role = 'categorical'; state.selected = 0; pendingImport = null; toast('已导入，可以开始调整颜色');
   }
   persist(); render();
 });
@@ -870,7 +870,7 @@ modal.addEventListener('click', async e => {
     if (!name) { document.querySelector('#save-name').focus(); return; }
     // The new scheme takes over a preset's edits, so the same colors are not listed twice.
     delete state.presetEdits[state.draft.id];
-    state.draft = { ...clone(state.draft), id: crypto.randomUUID(), name }; state.saved.push(clone(state.draft)); state.saved = state.saved.slice(-30); state.mode = 'draft'; persist(); modal.close(); render(); toast(`已保存「${name}」`);
+    state.draft = { ...clone(state.draft), id: crypto.randomUUID(), name }; state.saved.push(clone(state.draft)); state.saved = state.saved.slice(-30); persist(); modal.close(); render(); toast(`已保存「${name}」`);
   }
   if (action === 'export-palette') { download(current(), 'palette-lab-colors.json'); modal.close(); toast('已导出色板文件'); }
   if (action === 'export-session') {
