@@ -2,6 +2,7 @@ import { createSupabaseLiveClient } from './supabase-sync.js';
 // The read URL contains a random session ID. Only the creator's browser holds the write capability.
 const LIVE_OWNER_KEY = 'ainvest-live-owners:v1';
 const ACTIVE_LIVE_KEY = 'ainvest-live-active:v1';
+const BACKUP_REVISION_KEY = 'ainvest-live-backup-revisions:v1';
 const VIEWER_THEME_KEY = 'ainvest-live-viewer-theme:v1';
 const VIEWER_PALETTE_KEY = 'ainvest-live-viewer-palette:v1';
 const VIEWER_SCENE_KEY = 'ainvest-live-viewer-scene:v1';
@@ -51,6 +52,18 @@ function clearActiveOwner(storage, base) {
       storage.setItem(ACTIVE_LIVE_KEY, JSON.stringify(saved));
     }
   } catch { /* A corrupt hint cannot affect the stored edit credentials. */ }
+}
+// Which backup this browser last matched; a different one on the server means another browser saved since.
+function readBackupRevision(storage, base, id) {
+  try { const value = JSON.parse(storage.getItem(BACKUP_REVISION_KEY) || '{}')[`${syncIdentity(base)}|${id}`]; return Number.isSafeInteger(value) ? value : 0; } catch { return 0; }
+}
+function saveBackupRevision(storage, base, id, revision) {
+  try {
+    const saved = JSON.parse(storage.getItem(BACKUP_REVISION_KEY) || '{}');
+    const revisions = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+    revisions[`${syncIdentity(base)}|${id}`] = revision;
+    storage.setItem(BACKUP_REVISION_KEY, JSON.stringify(revisions));
+  } catch { /* An unknown revision only causes one extra restore on the next open. */ }
 }
 function readViewerTheme(storage) {
   try {
@@ -135,6 +148,8 @@ function createLiveClient(base, options = {}) {
     create: (snapshot, token) => request('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ snapshot, editToken: token }) }),
     get: id => request(`/${id}`),
     update: (id, token, revision, snapshot) => request(`/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ revision, snapshot }) }),
+    readBackup: id => request(`/${id}/backup`),
+    saveBackup: (id, token, revision, data) => request(`/${id}/backup`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ revision, data }) }),
     subscribe(id, onSnapshot, onStatus) {
       const events = new EventSourceClass(`${base}/api/sessions/${id}/events`);
       events.onopen = () => onStatus('已连接 · 只读同步');
@@ -144,4 +159,4 @@ function createLiveClient(base, options = {}) {
     }
   };
 }
-export { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, saveViewerPalette, readViewerScene, saveViewerScene, isQuietLiveStatus, discoverSyncBase, createLiveClient, validateSupabaseConfig, syncIdentity };
+export { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, readBackupRevision, saveBackupRevision, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, saveViewerPalette, readViewerScene, saveViewerScene, isQuietLiveStatus, discoverSyncBase, createLiveClient, validateSupabaseConfig, syncIdentity };

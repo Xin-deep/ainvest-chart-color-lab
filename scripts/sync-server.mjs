@@ -12,7 +12,7 @@ function normalizeSnapshot(input) {
   for (const module of input.aimeBoard.modules) {
     if (!module || typeof module.type !== 'string' || !/^[\w-]{1,80}$/.test(module.id) || !/^[\w-]{1,80}$/.test(module.type)) throw new Error('无效的图表模块');
   }
-  return { version: 1, baseline: restorePalette(input.baseline), draft: restorePalette(input.draft), saved: restoreSavedPalettes(input.saved), presetEdits: restorePresetEdits(input.presetEdits), lockedPalettes: Array.isArray(input.lockedPalettes) ? input.lockedPalettes.filter(id => typeof id === 'string').slice(0, 40) : [], aimeBoard: input.aimeBoard, financialBoard: input.financialBoard, financialDensity: input.financialDensity, customBoard: input.customBoard, customTemplate: input.customTemplate, comparisonBoards: input.comparisonBoards, theme: input.theme === 'dark' ? 'dark' : 'light', mode: input.mode === 'baseline' ? 'baseline' : 'draft', globalChartStyle: normalizeGlobalChartStyle(input.globalChartStyle) };
+  return { version: 1, baseline: restorePalette(input.baseline), draft: restorePalette(input.draft), saved: restoreSavedPalettes(input.saved), presetEdits: restorePresetEdits(input.presetEdits), lockedPalettes: Array.isArray(input.lockedPalettes) ? input.lockedPalettes.filter(id => typeof id === 'string').slice(0, 40) : [], hiddenPalettes: Array.isArray(input.hiddenPalettes) ? input.hiddenPalettes.filter(id => typeof id === 'string').slice(0, 40) : [], aimeBoard: input.aimeBoard, financialBoard: input.financialBoard, financialDensity: input.financialDensity, customBoard: input.customBoard, customTemplate: input.customTemplate, comparisonBoards: input.comparisonBoards, theme: input.theme === 'dark' ? 'dark' : 'light', mode: input.mode === 'baseline' ? 'baseline' : 'draft', globalChartStyle: normalizeGlobalChartStyle(input.globalChartStyle) };
 }
 const hash = token => createHash('sha256').update(token).digest('hex');
 export function createSyncServer({ root = resolve('dist'), dataDir = resolve('.data/live-sessions'), allowedOrigins = [] } = {}) {
@@ -58,9 +58,30 @@ export function createSyncServer({ root = resolve('dist'), dataDir = resolve('.d
           });
           return json(res, 201, publicRecord(record));
         }
-        const match = pathname.match(/^\/api\/sessions\/([^/]+)(\/events)?$/);
+        const match = pathname.match(/^\/api\/sessions\/([^/]+)(\/events|\/backup)?$/);
         if (!match || !ID.test(match[1])) return json(res, 404, { error: '方案不存在' });
         const id = match[1];
+        if (match[2] === '/backup') {
+          if (req.method === 'GET') {
+            const record = await load(id);
+            if (!record) return json(res, 404, { error: '方案不存在' });
+            return json(res, 200, record.backup || { revision: 0, data: null });
+          }
+          if (req.method !== 'PUT') return json(res, 405, { error: '不支持此操作' });
+          const input = await body(req);
+          const result = await serial(async () => {
+            const record = await load(id);
+            if (!record) return { status: 404, value: { error: '方案不存在' } };
+            const token = (req.headers.authorization || '').replace(/^Bearer /, '');
+            if (!TOKEN.test(token) || !timingSafeEqual(Buffer.from(hash(token)), Buffer.from(record.editHash))) return { status: 403, value: { error: '此链接只读，没有编辑权限' } };
+            if (!input.data || typeof input.data !== 'object' || Array.isArray(input.data)) return { status: 400, value: { error: '无效的备份' } };
+            if (input.revision !== (record.backup?.revision || 0)) return { status: 409, value: { error: '备份已被其他页面更新' } };
+            record.backup = { revision: input.revision + 1, data: input.data, updatedAt: new Date().toISOString() };
+            await store(record);
+            return { status: 200, value: { revision: record.backup.revision, updatedAt: record.backup.updatedAt } };
+          });
+          return json(res, result.status, result.value);
+        }
         if (req.method === 'PUT' && !match[2]) {
           const input = await body(req);
           const result = await serial(async () => {

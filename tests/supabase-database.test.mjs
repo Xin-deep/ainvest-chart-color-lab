@@ -20,6 +20,8 @@ before(async () => {
   const migration = await readFile(new URL('../supabase/migrations/202611020001_aime_live.sql', import.meta.url), 'utf8');
   await db.exec(migration);
   await db.exec(migration); // Re-running setup must not relax policies or erase records.
+  const backupMigration = await readFile(new URL('../supabase/migrations/202611050001_aime_backup.sql', import.meta.url), 'utf8');
+  await db.exec(backupMigration); await db.exec(backupMigration);
 });
 after(async () => { await db?.close(); });
 
@@ -80,4 +82,19 @@ test('snapshots keep palette identity and saved palettes for viewers', async () 
   const joined = await rpc('aime_join_live', [created.id]);
   assert.equal(joined.snapshot.draft.id, 'claude');
   assert.deepEqual(joined.snapshot.saved.map(p => p.id), ['plan-a']);
+});
+
+test('backups need the edit token to write, reject stale revisions and can be read by id alone', async () => {
+  await user(owner); const session = await create();
+  assert.deepEqual(await rpc('aime_read_backup', [session.id]), { revision: 0, data: null });
+  const first = await rpc('aime_save_backup', [session.id, token, 0, { saved: ['a'], editToken: token }]);
+  assert.equal(first.revision, 1);
+  await assert.rejects(rpc('aime_save_backup', [session.id, token, 0, { saved: ['stale'] }]), error => error.code === 'PT409');
+  await user(outsider);
+  await assert.rejects(rpc('aime_save_backup', [session.id, 'b'.repeat(64), 1, { saved: ['x'] }]), error => error.code === 'PT403');
+  const read = await rpc('aime_read_backup', [session.id]);
+  assert.deepEqual(read.data.saved, ['a']);
+  assert.equal(read.data.editToken, token);
+  await assert.rejects(db.query('select * from aime_private.backups'), error => error.code === '42501');
+  await assert.rejects(rpc('aime_read_backup', ['f'.repeat(32)]), error => error.code === 'PT404');
 });

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeColor, hsvToHex, hexToHsv } from '../dist/lib/colors.js';
-import { parseImport, validatePalette, createPalette, restorePalette, restoreSavedPalettes, restorePresetEdits, restoreLockedPalettes, orderSavedPalettes, countColorChanges, writeBackDraft, moveSeriesColor, removeSeriesColor, addSeriesColor, indexAfterMove } from '../dist/lib/palettes.js';
+import { parseImport, validatePalette, createPalette, restorePalette, restoreSavedPalettes, restorePresetEdits, restoreLockedPalettes, shareableSnapshot, mergeBackupPalettes, orderSavedPalettes, countColorChanges, writeBackDraft, moveSeriesColor, removeSeriesColor, addSeriesColor, indexAfterMove } from '../dist/lib/palettes.js';
 import { rampColor } from '../dist/lib/oklch.js';
 import { presets, dropRetiredBackgrounds } from '../dist/data/presets.js';
 
@@ -248,4 +248,40 @@ test('locks survive reloading only for palettes that still exist', () => {
   assert.deepEqual(restoreLockedPalettes(['claude', 'gone', 'claude', 'plan-a'], ['ainvest', 'claude', 'plan-a']), ['claude', 'plan-a']);
   assert.deepEqual(restoreLockedPalettes('claude', ['claude']), []);
   assert.deepEqual(restoreLockedPalettes(undefined, ['claude']), []);
+});
+
+test('hidden palettes leave no data in what gets shared', () => {
+  const [first, second] = presets;
+  const plan = { ...structuredClone(first), id: 'plan-a', name: '方案 A' }, other = { ...structuredClone(first), id: 'plan-b', name: '方案 B' };
+  const base = { baseline: plan, draft: plan, saved: [plan, other], presetEdits: { [second.id]: structuredClone(second) }, lockedPalettes: ['plan-a', 'plan-b'] };
+  const shared = shareableSnapshot(base, ['plan-a', second.id], presets);
+  assert.deepEqual(shared.saved.map(p => p.id), ['plan-b']);
+  assert.deepEqual(Object.keys(shared.presetEdits), []);
+  assert.deepEqual(shared.lockedPalettes, ['plan-b']);
+  assert.deepEqual(shared.hiddenPalettes, [second.id]);
+  assert.equal(shared.draft.id, first.id);
+  assert.equal(shared.baseline.id, first.id);
+  assert.ok(!JSON.stringify(shared).includes('方案 A'));
+  // The owner's own state is untouched.
+  assert.equal(base.draft.id, 'plan-a');
+  assert.equal(base.saved.length, 2);
+});
+test('sharing still has a palette to show when everything is hidden, and never a saved one', () => {
+  const plan = { ...structuredClone(presets[0]), id: 'plan-a', name: '方案 A' };
+  const shared = shareableSnapshot({ baseline: plan, draft: plan, saved: [plan], presetEdits: {}, lockedPalettes: [] }, [...presets.map(p => p.id), 'plan-a'], presets);
+  assert.equal(shared.draft.id, presets[0].id);
+  assert.deepEqual(shared.saved, []);
+  assert.ok(!shared.hiddenPalettes.includes(presets[0].id));
+});
+
+test('restoring a backup prefers its copies and keeps what only this browser has', () => {
+  const plan = (id, name) => ({ ...structuredClone(presets[0]), id, name });
+  const merged = mergeBackupPalettes(
+    { saved: [plan('both', '本地'), plan('local', '只在本地')], presetEdits: { claude: 'local', ainvest: 'local' }, lockedPalettes: ['local'], hiddenPalettes: ['both'] },
+    { saved: [plan('both', '云端'), plan('cloud', '只在云端')], presetEdits: { claude: 'cloud' }, lockedPalettes: ['cloud', 'gone'], hiddenPalettes: ['claude'] },
+    presets.map(p => p.id));
+  assert.deepEqual(merged.saved.map(p => p.name), ['云端', '只在云端', '只在本地']);
+  assert.deepEqual(merged.presetEdits, { claude: 'cloud', ainvest: 'local' });
+  assert.deepEqual(merged.lockedPalettes, ['local', 'cloud']);
+  assert.deepEqual(merged.hiddenPalettes, ['both', 'claude']);
 });
