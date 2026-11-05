@@ -175,6 +175,7 @@ test('the sync service keeps palette identity and saved palettes for viewers', a
   source.financialDensity = 'standard';
   source.customTemplate = 'free';
   source.lockedPalettes = ['claude', 7];
+  source.hiddenPalettes = ['tradingview', 7];
   source.comparisonBoards = {};
   const created = await api(base, '', 'POST', { snapshot: source, editToken: token });
   const { data } = await api(base, '/' + created.data.id);
@@ -186,6 +187,7 @@ test('the sync service keeps palette identity and saved palettes for viewers', a
   assert.equal(data.snapshot.financialDensity, 'standard');
   assert.equal(data.snapshot.customTemplate, 'free');
   assert.deepEqual(data.snapshot.lockedPalettes, ['claude']);
+  assert.deepEqual(data.snapshot.hiddenPalettes, ['tradingview']);
   assert.deepEqual(data.snapshot.comparisonBoards, {});
 });
 

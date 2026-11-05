@@ -90,6 +90,27 @@ export function writeBackDraft({ draft, saved, presetEdits }, presets) {
 export function restoreLockedPalettes(input, knownIds) {
   return Array.isArray(input) ? [...new Set(input)].filter(id => knownIds.includes(id)) : [];
 }
+// Hidden palettes are left out of what gets published, not just out of the viewer's list.
+// Hidden presets ship with the code, so only those ids travel, for viewers to filter them out.
+export function shareableSnapshot(snapshot, hiddenIds, presetList) {
+  const hidden = new Set(hiddenIds);
+  const presetEdits = Object.fromEntries(Object.entries(snapshot.presetEdits).filter(([id]) => !hidden.has(id)));
+  const saved = snapshot.saved.filter(p => !hidden.has(p.id));
+  const preset = presetList.find(p => !hidden.has(p.id));
+  const fallback = preset || saved[0] || presetList[0];
+  const hiddenPresets = presetList.filter(p => hidden.has(p.id) && p.id !== fallback.id).map(p => p.id);
+  const shared = { ...snapshot, saved, presetEdits, lockedPalettes: snapshot.lockedPalettes.filter(id => !hidden.has(id)), hiddenPalettes: hiddenPresets };
+  if (hidden.has(snapshot.draft.id)) { shared.draft = clone(presetEdits[fallback.id] || fallback); shared.baseline = clone(fallback); }
+  else if (hidden.has(snapshot.baseline.id)) shared.baseline = clone(snapshot.draft);
+  return shared;
+}
+// A backup wins for palettes both sides have; anything only this browser has is kept, so restoring never loses work.
+export function mergeBackupPalettes(local, backup, knownPresetIds) {
+  const ids = new Set(backup.saved.map(p => p.id));
+  const saved = [...backup.saved, ...local.saved.filter(p => !ids.has(p.id))];
+  const known = [...knownPresetIds, ...saved.map(p => p.id)];
+  return { saved, presetEdits: { ...local.presetEdits, ...backup.presetEdits }, lockedPalettes: restoreLockedPalettes([...local.lockedPalettes, ...(backup.lockedPalettes || [])], known), hiddenPalettes: restoreLockedPalettes([...local.hiddenPalettes, ...(backup.hiddenPalettes || [])], known) };
+}
 // Puts schemes in the given id order; anything the order does not mention keeps its place at the end.
 export function orderSavedPalettes(saved, ids) {
   const rank = id => { const index = ids.indexOf(id); return index < 0 ? ids.length : index; };

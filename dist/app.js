@@ -1,4 +1,4 @@
-import { LIVE_ID_PATTERN, createEditToken, readOwner, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, saveViewerPalette, readViewerScene, saveViewerScene, isQuietLiveStatus, discoverSyncBase, createLiveClient } from './lib/live-sync.js';
+import { LIVE_ID_PATTERN, createEditToken, readOwner, readBackupRevision, saveBackupRevision, saveOwner, readActiveOwner, saveActiveOwner, clearActiveOwner, readViewerTheme, saveViewerTheme, readViewerPalette, saveViewerPalette, readViewerScene, saveViewerScene, isQuietLiveStatus, discoverSyncBase, createLiveClient } from './lib/live-sync.js';
 import { encodeMobilePreview, decodeMobilePreview } from './lib/mobile-preview.js';
 import { bindColorJsPicker, loadColorJsPicker } from './lib/colorjs-picker.js';
 import { comparisonTemplates, createComparisonBoard, validateComparisonBoards, comparisonTemplatePanel } from './scenes/comparison.js';
@@ -7,7 +7,7 @@ import { defaultCheckSettings, normalizeCheckSettings, buildPaletteCheckReport }
 import { renderColorChecks, renderColorCheckBadges } from './scenes/color-checks.js';
 import { hexToOklch, checkOklch, oklchCss } from './lib/oklch.js';
 import { presets, dropRetiredBackgrounds } from './data/presets.js';
-import { clone, roles, seriesRoles, validatePalette, restorePalette, restoreSavedPalettes, restorePresetEdits, restoreLockedPalettes, orderSavedPalettes, countColorChanges, writeBackDraft, moveSeriesColor, removeSeriesColor, addSeriesColor, indexAfterMove, parseImport, parseTextPalette } from './lib/palettes.js';
+import { clone, roles, seriesRoles, validatePalette, restorePalette, restoreSavedPalettes, restorePresetEdits, restoreLockedPalettes, shareableSnapshot, mergeBackupPalettes, orderSavedPalettes, countColorChanges, writeBackDraft, moveSeriesColor, removeSeriesColor, addSeriesColor, indexAfterMove, parseImport, parseTextPalette } from './lib/palettes.js';
 import { normalizeColor, hexToHsv, hsvToHex, rgbText } from './lib/colors.js';
 import { renderFinancialScene, applyFinancialPalette } from './scenes/financial.js';
 
@@ -19,7 +19,7 @@ import { financialChartModules, financialModulesFor } from './data/financial-sha
 
 import { defaultFinancialBoard, validateFinancialBoard, renderFinancialExtras } from './scenes/financial-extras.js';
 
-const VERSION = '0.23.0';
+const VERSION = '0.24.0';
 const STORAGE_KEY = 'ainvest-palette-lab:v1';
 const scenes = [
   { id: 'aime', name: 'Aime 对话', en: 'Aime conversation', icon: 'chat' },
@@ -53,13 +53,15 @@ const paths = {
   close: '<path d="m6 6 12 12M6 18 18 6"/>',
   copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M15 8V4H4v11h4"/>',
   lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4"/>',
+  pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/>',
+  eyeOff: '<path d="M4 4l16 16"/><path d="M9.9 5.2A9.6 9.6 0 0 1 12 5c5.5 0 9 7 9 7a15.6 15.6 0 0 1-3 3.8M6.4 6.9A15 15 0 0 0 3 12s3.5 7 9 7a9 9 0 0 0 4.2-1"/><path d="M10 10a3 3 0 0 0 4 4"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
   file: '<path d="M14 3H5v18h14V8zM14 3v5h5M8 13h8M8 17h5"/>',
   refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 6a8 8 0 0 1 13 3M5 15a8 8 0 0 0 13 3"/>',
 };
 const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.grid}</svg>`;
 const esc = text => String(text ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let state = { baseline: clone(presets[0]), draft: clone(presets[0]), scene: 'financial', theme: 'light', role: 'categorical', selected: 0, panel: 'palette', editorOpen: false, chartStyleOpen: false, editorModel: 'oklch', collapsed: innerWidth < 650, previewFullscreen: new URLSearchParams(location.search).get('preview') === 'fullscreen', saved: [], presetEdits: {}, lockedPalettes: [], pnlTrend: 'up', globalChartStyle: normalizeGlobalChartStyle(), checkSettings: defaultCheckSettings(), financialBoard: defaultFinancialBoard(), financialDensity: 'compact', customTemplate:'all', comparisonBoards:{}, customBoard: defaultCompactBoard(), aimeBoard: defaultAimeBoard() };
+let state = { baseline: clone(presets[0]), draft: clone(presets[0]), scene: 'financial', theme: 'light', role: 'categorical', selected: 0, panel: 'palette', editorOpen: false, chartStyleOpen: false, editorModel: 'oklch', collapsed: innerWidth < 650, previewFullscreen: new URLSearchParams(location.search).get('preview') === 'fullscreen', saved: [], presetEdits: {}, lockedPalettes: [], hiddenPalettes: [], pnlTrend: 'up', globalChartStyle: normalizeGlobalChartStyle(), checkSettings: defaultCheckSettings(), financialBoard: defaultFinancialBoard(), financialDensity: 'compact', customTemplate:'all', comparisonBoards:{}, customBoard: defaultCompactBoard(), aimeBoard: defaultAimeBoard() };
 let storageAvailable = true, loaded = false;
 function restoreStoredPresetEdits(input) {
   const edits = restorePresetEdits(input, presets.map(p => p.id));
@@ -79,6 +81,7 @@ try {
     }
     state = { ...state, editorModel: stored.editorModel === 'hsb' ? 'hsb' : 'oklch', customTemplate: [...comparisonTemplates.map(t=>t.id),'free'].includes(stored.customTemplate)?stored.customTemplate:'all', comparisonBoards:validateComparisonBoards(stored.comparisonBoards), globalChartStyle: normalizeGlobalChartStyle(stored.globalChartStyle), checkSettings: normalizeCheckSettings(stored.checkSettings), financialBoard: validateFinancialBoard(stored.financialBoard), financialDensity: stored.financialDensity === 'standard' ? 'standard' : 'compact', customBoard: validateCompactBoard(stored.customBoard), aimeBoard: validateAimeBoard(stored.aimeBoard), baseline: base, draft, scene: scenes.some(s => s.id === stored.scene) ? stored.scene : 'financial', collapsed: typeof stored.collapsed === 'boolean' ? stored.collapsed : state.collapsed, theme: ['light', 'dark'].includes(stored.theme) ? stored.theme : 'light', saved: (stored.saved || []).slice(-30).flatMap(p => { try { const v = validatePalette(p); v.id = p.id; return [v]; } catch { return []; } }), presetEdits: restoreStoredPresetEdits(stored.presetEdits) };
     state.lockedPalettes = restoreLockedPalettes(stored.lockedPalettes, [...presets, ...state.saved].map(p => p.id));
+    state.hiddenPalettes = restoreLockedPalettes(stored.hiddenPalettes, [...presets, ...state.saved].map(p => p.id));
     loaded = true;
   }
 } catch { storageAvailable = false; }
@@ -99,7 +102,7 @@ if (aimeEntry && !mobileEntry) document.title = 'Palette Lab · 查看配色';
 // The phone entry only ever shows the Aime conversation, read-only; other scenes and editing stay on the website.
 const requestedScene = mobileEntry ? 'aime' : new URLSearchParams(location.search).get('scene');
 if (scenes.some(s => s.id === requestedScene)) state.scene = requestedScene;
-let mobileShareError = '', sharedPreviewLoaded = false;
+let mobileShareError = '', sharedPreviewLoaded = false, sharedPreviewHidden = [];
 try {
   const shared = decodeMobilePreview(location.hash);
   if (shared) {
@@ -107,6 +110,7 @@ try {
     const aimeBoard = validateAimeBoard(shared.aimeBoard);
     state = { ...state, baseline, draft, aimeBoard, scene: 'aime', theme: shared.theme === 'dark' ? 'dark' : 'light', globalChartStyle: normalizeGlobalChartStyle(shared.globalChartStyle) };
     sharedPreviewLoaded = true;
+    sharedPreviewHidden = restoreLockedPalettes(shared.hiddenPalettes, presets.map(p => p.id));
     // A snapshot opened where it can be edited must not overwrite the local palette with the same id.
     const local = [...presets, ...state.saved].find(p => p.id === draft.id);
     if (!mobileEntry && local && countColorChanges(state.presetEdits[local.id] || local, draft)) { draft.id = crypto.randomUUID(); baseline.id = draft.id; }
@@ -121,10 +125,10 @@ const isDesktopViewer = () => live.role === 'viewer' && live.ready && !mobileEnt
 const viewerSceneNow = () => live.viewerScene && innerWidth > 650 ? live.viewerScene : 'aime';
 const liveParams = new URLSearchParams(location.search);
 const requestedLiveId = liveParams.get('live') || liveParams.get('edit');
-const live = { role: requestedLiveId || mobileEntry ? 'viewer' : null, id: requestedLiveId, loading: !!requestedLiveId, ready: mobileEntry && !requestedLiveId, client: null, base: null, token: null, revision: 0, status: requestedLiveId ? '正在连接共享方案…' : '', error: '', pending: null, writing: false, lastJSON: '', timer: null, retry: null, stop: null, generation: 0, conflict: false, viewerTheme: null, viewerPalette: null, viewerScene: null, sharedPalettes: [], sharedPresetEdits: {}, sharedLocks: [] };
+const live = { role: requestedLiveId || mobileEntry ? 'viewer' : null, id: requestedLiveId, loading: !!requestedLiveId, ready: mobileEntry && !requestedLiveId, client: null, base: null, token: null, revision: 0, status: requestedLiveId ? '正在连接共享方案…' : '', error: '', pending: null, writing: false, lastJSON: '', timer: null, retry: null, stop: null, generation: 0, conflict: false, viewerTheme: null, viewerPalette: null, viewerScene: null, sharedPalettes: [], sharedPresetEdits: {}, sharedLocks: [], sharedHidden: [], backupState: '', backupRevision: 0, backupJSON: '', backupTimer: null, backupWriting: false, backupAgain: false };
 const isLiveReadOnly = () => live.role === 'viewer' || live.loading;
 if (requestedLiveId) { state.scene = 'aime'; state.collapsed = true; state.previewFullscreen = false; }
-function liveSnapshot() { return { baseline: state.baseline, draft: state.draft, saved: state.saved, presetEdits: state.presetEdits, lockedPalettes: state.lockedPalettes, aimeBoard: state.aimeBoard, financialBoard: state.financialBoard, financialDensity: state.financialDensity, customBoard: state.customBoard, customTemplate: state.customTemplate, comparisonBoards: state.comparisonBoards, theme: state.theme, globalChartStyle: state.globalChartStyle }; }
+function liveSnapshot() { return shareableSnapshot({ baseline: state.baseline, draft: state.draft, saved: state.saved, presetEdits: state.presetEdits, lockedPalettes: state.lockedPalettes, aimeBoard: state.aimeBoard, financialBoard: state.financialBoard, financialDensity: state.financialDensity, customBoard: state.customBoard, customTemplate: state.customTemplate, comparisonBoards: state.comparisonBoards, theme: state.theme, globalChartStyle: state.globalChartStyle }, state.hiddenPalettes, presets); }
 // Links created before layouts were shared leave them out, and that must not reset the local boards.
 function snapshotLayouts(snapshot) {
   const layouts = {};
@@ -140,6 +144,7 @@ function applyLiveSnapshot(snapshot) {
   live.sharedPalettes = restoreSavedPalettes(snapshot.saved);
   live.sharedPresetEdits = restoreStoredPresetEdits(snapshot.presetEdits);
   live.sharedLocks = restoreLockedPalettes(snapshot.lockedPalettes, [...presets, ...live.sharedPalettes].map(p => p.id).concat(snapshot.draft?.id));
+  live.sharedHidden = restoreLockedPalettes(snapshot.hiddenPalettes, presets.map(p => p.id));
   state = { ...state, ...snapshotLayouts(snapshot), baseline, draft, aimeBoard, scene: viewerSceneNow(), theme: snapshot.theme === 'dark' ? 'dark' : 'light', globalChartStyle: normalizeGlobalChartStyle(snapshot.globalChartStyle), editorOpen: false };
   refreshUneditedPreset();
 }
@@ -149,7 +154,7 @@ function keepViewerTheme() {
   state.theme = live.viewerTheme;
 }
 // Without a fixed link, phones read local colors or a static snapshot the same way.
-if (mobileEntry && !requestedLiveId) { live.sharedPalettes = state.saved; live.sharedPresetEdits = state.presetEdits; live.sharedLocks = state.lockedPalettes; keepViewerTheme(); }
+if (mobileEntry && !requestedLiveId) { live.sharedPalettes = state.saved; live.sharedPresetEdits = state.presetEdits; live.sharedLocks = state.lockedPalettes; live.sharedHidden = sharedPreviewHidden; keepViewerTheme(); }
 // Phone viewers read connection state from the dot; the bar only carries errors they can act on.
 const liveBarHidden = () => live.role === 'viewer' && isMobileAime() ? !live.error : isQuietLiveStatus(live.status) && !live.error && !live.conflict;
 const liveDotClass = () => !live.ready && !live.error ? 'is-pending' : isQuietLiveStatus(live.status) && !live.error ? 'is-connected' : 'is-disconnected';
@@ -185,9 +190,41 @@ async function flushLiveSnapshot() {
     else { liveStatus('暂未同步，正在重试'); clearTimeout(live.retry); live.retry = setTimeout(() => { live.retry = null; flushLiveSnapshot(); }, 2000); }
   } finally { if (generation === live.generation) { live.writing = false; if (live.pending && !live.conflict && !live.retry) live.timer = setTimeout(flushLiveSnapshot, 250); } }
 }
+// The backup holds everything this browser stores plus the edit token, so the ?edit= link alone can restore both.
+function queueBackup() {
+  if (live.role !== 'owner' || !live.ready || !['ok', 'retrying'].includes(live.backupState)) return;
+  clearTimeout(live.backupTimer);
+  live.backupTimer = setTimeout(flushBackup, 1000);
+}
+async function flushBackup() {
+  if (live.role !== 'owner' || !['ok', 'retrying'].includes(live.backupState)) return;
+  if (live.backupWriting) { live.backupAgain = true; return; }
+  const json = JSON.stringify({ ...storedState(), editToken: live.token }), generation = live.generation;
+  if (json === live.backupJSON) return;
+  live.backupWriting = true;
+  try {
+    const saved = await live.client.saveBackup(live.id, live.token, live.backupRevision, JSON.parse(json));
+    if (generation !== live.generation) return;
+    Object.assign(live, { backupRevision: saved.revision, backupJSON: json, backupState: 'ok' });
+    saveBackupRevision(localStorage, live.base, live.id, saved.revision);
+  } catch (error) {
+    if (generation !== live.generation) return;
+    if (error.status === 409) { live.backupState = 'conflict'; toast('另一个页面更新了备份，这里已暂停备份；刷新后会合并'); }
+    else if (error.status === 503) live.backupState = 'off';
+    else { live.backupState = 'retrying'; clearTimeout(live.backupTimer); live.backupTimer = setTimeout(flushBackup, 5000); }
+  } finally {
+    if (generation === live.generation) { live.backupWriting = false; if (live.backupAgain) { live.backupAgain = false; queueBackup(); } }
+  }
+}
+function restoreFromBackup(data) {
+  const merged = mergeBackupPalettes(state, { saved: restoreSavedPalettes(data.saved), presetEdits: restoreStoredPresetEdits(data.presetEdits), lockedPalettes: data.lockedPalettes, hiddenPalettes: data.hiddenPalettes }, presets.map(p => p.id));
+  state = { ...state, ...merged, ...snapshotLayouts(data), baseline: dropRetiredBackgrounds(restorePalette(data.baseline, presets)), draft: dropRetiredBackgrounds(restorePalette(data.draft, presets)), aimeBoard: validateAimeBoard(data.aimeBoard), checkSettings: normalizeCheckSettings(data.checkSettings), globalChartStyle: normalizeGlobalChartStyle(data.globalChartStyle) };
+  history = []; future = [];
+}
+const backupNote = () => ({ ok: '已备份到云端。清空本地或换电脑后，打开编辑链接就能找回，所以编辑链接不要外传。', retrying: '备份暂时失败，正在重试。', conflict: '另一个页面更新了备份，这里已暂停备份，刷新后会合并。', off: '云端备份还没开启，色板目前只存在这个浏览器里。' })[live.backupState] || '云端备份暂不可用，色板目前只存在这个浏览器里。';
 function detachLive() {
-  live.stop?.(); clearTimeout(live.timer); clearTimeout(live.retry);
-  live.generation++; Object.assign(live, { role: null, id: null, ready: false, loading: false, pending: null, writing: false, stop: null, token: null, retry: null, conflict: false, error: '', viewerPalette: null, viewerScene: null, sharedPalettes: [], sharedPresetEdits: {}, sharedLocks: [] });
+  live.stop?.(); clearTimeout(live.timer); clearTimeout(live.retry); clearTimeout(live.backupTimer);
+  live.generation++; Object.assign(live, { backupState: '', backupRevision: 0, backupJSON: '', backupWriting: false, backupAgain: false, role: null, id: null, ready: false, loading: false, pending: null, writing: false, stop: null, token: null, retry: null, conflict: false, error: '', viewerPalette: null, viewerScene: null, sharedPalettes: [], sharedPresetEdits: {}, sharedLocks: [], sharedHidden: [] });
 }
 async function connectLive({ throwOnError = false, keepLocal = false } = {}) {
   if (!live.id) return;
@@ -198,19 +235,37 @@ async function connectLive({ throwOnError = false, keepLocal = false } = {}) {
     live.base = await discoverSyncBase(); live.client = createLiveClient(live.base);
     const record = await live.client.get(live.id);
     if (generation !== live.generation) return;
-    const token = !mobileEntry && new URLSearchParams(location.search).has('edit') ? readOwner(localStorage, live.base, live.id) : null;
+    const wantsEdit = !mobileEntry && new URLSearchParams(location.search).has('edit');
+    let token = wantsEdit ? readOwner(localStorage, live.base, live.id) : null, backup = null, backupState = '';
+    // Sharing still works when backups are off, so a failed read only leaves this browser's own copy in charge.
+    if (wantsEdit) {
+      try { backup = await live.client.readBackup(live.id); backupState = 'ok'; }
+      catch (error) { backupState = error.status === 503 ? 'off' : 'failed'; }
+      if (generation !== live.generation) return;
+      if (!token && /^[a-f0-9]{64}$/.test(backup?.data?.editToken || '')) { token = backup.data.editToken; saveOwner(localStorage, live.base, live.id, token); }
+    }
     // Sharing again publishes what the owner is looking at instead of restoring the stored copy.
     const publishLocal = keepLocal && !!token;
-    if (!publishLocal) applyLiveSnapshot(record.snapshot);
+    // The link never holds a hidden palette, so its owner stays on the one they had open.
+    const openHidden = token && state.hiddenPalettes.includes(state.draft.id) ? { baseline: state.baseline, draft: state.draft } : null;
+    if (!publishLocal) { applyLiveSnapshot(record.snapshot); if (openHidden) Object.assign(state, openHidden); }
+    let restored = false;
+    if (token && backup?.data && backup.revision !== readBackupRevision(localStorage, live.base, live.id)) {
+      try { restoreFromBackup(backup.data); restored = true; }
+      catch { backupState = 'failed'; toast('云端备份无法读取，已保留这个浏览器的数据'); }
+    }
+    Object.assign(live, { backupState: token ? backupState : '', backupRevision: backup?.revision || 0, backupJSON: '', backupWriting: false, backupAgain: false });
+    if (restored) saveBackupRevision(localStorage, live.base, live.id, backup.revision);
     live.role = token ? 'owner' : 'viewer'; live.token = token; live.revision = record.revision; live.ready = true; live.loading = false; live.error = ''; live.conflict = false; live.pending = null; live.writing = false;
     // A link from before layouts were shared gets them from its owner on the next open.
     const publishLayouts = !!token && !record.snapshot.financialBoard;
-    live.lastJSON = publishLocal || publishLayouts ? '' : JSON.stringify(liveSnapshot());
+    live.lastJSON = publishLocal || publishLayouts || restored ? '' : JSON.stringify(liveSnapshot());
     if (token) saveActiveOwner(localStorage, live.base, live.id);
     else { keepViewerTheme(); live.viewerPalette = readViewerPalette(localStorage, live.id); live.viewerScene = mobileEntry ? null : readViewerScene(localStorage, live.id, scenes.map(s => s.id)); state.scene = viewerSceneNow(); }
     state.collapsed = live.role === 'viewer' && (mobileEntry || innerWidth <= 650);
     liveStatus(token ? '已同步 · 查看页面自动更新' : '已连接 · 只读同步'); render();
     if (publishLocal || publishLayouts) queueLiveSnapshot();
+    if (restored) { persist(); toast('已从云端备份找回色板'); render(); } else if (token) queueBackup();
     if (!token) live.stop = live.client.subscribe(live.id, next => {
       if (generation !== live.generation || next.revision <= live.revision) return;
       applyLiveSnapshot(next.snapshot); keepViewerTheme(); live.revision = next.revision; liveStatus('已连接 · 只读同步'); render();
@@ -237,6 +292,7 @@ async function ensureLiveOwner() {
   saveActiveOwner(localStorage, base, record.id);
   Object.assign(live, { role: 'owner', id: record.id, client, base, token, revision: record.revision, ready: true, lastJSON: JSON.stringify(liveSnapshot()) });
   const url = new URL(location.href); url.searchParams.delete('live'); url.searchParams.set('edit', record.id); url.hash = ''; historyReplaceLive(url);
+  Object.assign(live, { backupState: 'ok', backupRevision: 0, backupJSON: '' }); queueBackup();
   liveStatus('已同步 · 查看页面自动更新'); render();
 }
 function historyReplaceLive(url) { window.history.replaceState(null, '', url); }
@@ -274,7 +330,7 @@ function loadLazyScene(id) {
 }
 const lazySceneHolder = id => `<div class="scene-loading">${lazyScenes[id].failed ? `<p>场景加载失败，请检查网络</p><button class="button" data-action="scene-retry" data-value="${id}">重试</button>` : '<p>正在加载场景…</p>'}</div>`;
 const sharedPalette = () => state.draft;
-const viewerOptions = () => [...presets.map(p => live.sharedPresetEdits[p.id] || p), ...live.sharedPalettes];
+const viewerOptions = () => [...presets.filter(p => !live.sharedHidden.includes(p.id)).map(p => live.sharedPresetEdits[p.id] || p), ...live.sharedPalettes];
 // The tab that shows the owner's live colors, using the same rule as the workbench tabs.
 const ownerTabId = () => viewerOptions().some(p => p.id === state.draft.id) ? state.draft.id : 'current';
 function viewerPick() {
@@ -285,11 +341,13 @@ const current = () => viewerPick() || sharedPalette();
 // The console lists the colors the open scene really shows; edits still go to the palette itself.
 const shownPalette = (palette = current()) => state.scene === 'aime' ? aimeShownPalette(palette, state.theme) : palette;
 const selectedColor = () => state.draft.themes[state.theme][state.role][state.selected];
+const storedState = () => ({ schemaVersion: 1, toolVersion: VERSION, baseline: state.baseline, draft: state.draft, scene: state.scene, theme: state.theme, editorModel: state.editorModel, collapsed: state.collapsed, saved: state.saved, presetEdits: state.presetEdits, lockedPalettes: state.lockedPalettes, hiddenPalettes: state.hiddenPalettes, customTemplate:state.customTemplate, comparisonBoards:state.comparisonBoards, customBoard: state.customBoard, aimeBoard: state.aimeBoard, financialDensity: state.financialDensity, financialBoard: state.financialBoard, checkSettings: state.checkSettings, globalChartStyle: state.globalChartStyle });
 function persist() {
   if (isLiveReadOnly()) return;
   writeBackDraft(state, presets);
   queueLiveSnapshot();
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: 1, toolVersion: VERSION, baseline: state.baseline, draft: state.draft, scene: state.scene, theme: state.theme, editorModel: state.editorModel, collapsed: state.collapsed, saved: state.saved, presetEdits: state.presetEdits, lockedPalettes: state.lockedPalettes, customTemplate:state.customTemplate, comparisonBoards:state.comparisonBoards, customBoard: state.customBoard, aimeBoard: state.aimeBoard, financialDensity: state.financialDensity, financialBoard: state.financialBoard, checkSettings: state.checkSettings, globalChartStyle: state.globalChartStyle })); storageAvailable = true; }
+  queueBackup();
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(storedState())); storageAvailable = true; }
   catch { storageAvailable = false; }
 }
 function toast(message) {
@@ -303,6 +361,54 @@ function togglePaletteLock(id) {
   if (!locked && id === state.draft.id) state.editorOpen = false;
   persist(); render();
   toast(locked ? '已解锁，可以修改' : '已锁定，不会被修改；再次右键可解锁');
+}
+function isPaletteHidden(id) { return state.hiddenPalettes.includes(id); }
+function togglePaletteHidden(id) {
+  const hidden = isPaletteHidden(id);
+  if (!hidden && [...presets, ...state.saved].every(p => p.id === id || isPaletteHidden(p.id))) { toast('至少要留一个色板给查看者'); return; }
+  state.hiddenPalettes = hidden ? state.hiddenPalettes.filter(v => v !== id) : [...state.hiddenPalettes, id];
+  persist(); render();
+  toast(hidden ? '已取消隐藏，分享页可以看到' : '已隐藏，分享页看不到这个色板');
+}
+function openRenameModal(id) {
+  const palette = state.saved.find(p => p.id === id); if (!palette) return;
+  openModal(`${modalHead('重命名色板')}<label for="rename-name">色板名称</label><input id="rename-name" class="modal-input" maxlength="80" value="${esc(palette.name)}" autocomplete="off"><div class="inline-error" id="rename-error" role="alert"></div><div class="modal-actions"><button class="button" data-modal-action="close">取消</button><button class="button primary" data-modal-action="rename-palette" data-value="${esc(palette.id)}">保存名称</button></div>`);
+  const field = document.querySelector('#rename-name'); field.focus(); field.select();
+  field.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); modal.querySelector('[data-modal-action="rename-palette"]').click(); } });
+}
+let paletteMenu = null;
+function closePaletteMenu() {
+  if (!paletteMenu) return;
+  paletteMenu.remove(); paletteMenu = null;
+  removeEventListener('pointerdown', onPaletteMenuOutside, true); removeEventListener('scroll', closePaletteMenu, true); removeEventListener('resize', closePaletteMenu); removeEventListener('blur', closePaletteMenu);
+}
+const onPaletteMenuOutside = event => { if (!paletteMenu?.contains(event.target)) closePaletteMenu(); };
+// Saved schemes can also be renamed and deleted; a tab outside the list can only be locked, since a hide would not survive a reload.
+function openPaletteMenu(id, listed, x, y, tab) {
+  closePaletteMenu();
+  const locked = isPaletteLocked(id), own = state.saved.some(p => p.id === id), item = (name, label, iconName, disabled = false) => `<button role="menuitem" data-menu="${name}" ${disabled ? 'disabled title="已锁定，请先解锁"' : ''}>${icon(iconName)}<span>${label}</span></button>`;
+  paletteMenu = document.createElement('div');
+  paletteMenu.className = 'palette-menu'; paletteMenu.setAttribute('role', 'menu'); paletteMenu.setAttribute('aria-label', '色板操作');
+  paletteMenu.innerHTML = item('lock', locked ? '解锁' : '锁定', 'lock') + (listed ? item('hide', isPaletteHidden(id) ? '在分享页显示' : '在分享页隐藏', 'eyeOff') : '') + (own ? '<div class="palette-menu-line" role="separator"></div>' + item('rename', '重命名', 'pencil', locked) + item('delete', '删除', 'trash', locked) : '');
+  document.body.append(paletteMenu);
+  const box = paletteMenu.getBoundingClientRect();
+  paletteMenu.style.left = Math.max(8, Math.min(x, innerWidth - box.width - 8)) + 'px';
+  paletteMenu.style.top = Math.max(8, Math.min(y, innerHeight - box.height - 8)) + 'px';
+  paletteMenu.addEventListener('click', event => {
+    const choice = event.target.closest('[data-menu]')?.dataset.menu; if (!choice) return;
+    closePaletteMenu();
+    if (choice === 'lock') togglePaletteLock(id);
+    if (choice === 'hide') togglePaletteHidden(id);
+    if (choice === 'rename') openRenameModal(id);
+    if (choice === 'delete') deletePalette(id);
+  });
+  paletteMenu.addEventListener('keydown', event => {
+    const items = [...paletteMenu.querySelectorAll('button:not(:disabled)')], at = items.indexOf(document.activeElement);
+    if (event.key === 'Escape') { event.preventDefault(); closePaletteMenu(); tab.focus?.({ preventScroll: true }); }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); items[(at + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus(); }
+  });
+  paletteMenu.querySelector('button:not(:disabled)').focus({ preventScroll: true });
+  addEventListener('pointerdown', onPaletteMenuOutside, true); addEventListener('scroll', closePaletteMenu, true); addEventListener('resize', closePaletteMenu); addEventListener('blur', closePaletteMenu);
 }
 function deletePalette(id) {
   if(isPaletteLocked(id)){toast('已锁定的方案不能删除，请先右键解锁');return;}
@@ -443,17 +549,18 @@ function viewerPaletteBar() {
   const { options, selected } = viewerChoices();
   const chip = p => `<button data-action="viewer-palette" data-value="${esc(p.id)}" aria-pressed="${p.id === selected}" class="${p.id === selected ? 'active' : ''}">${viewerLockMark(p)}${esc(p.id === 'current' ? p.name : paletteLabel(p))}</button>`;
   const row = (list, label) => list.length ? `<div class="aime-viewer-palettes" role="group" aria-label="${label}">${list.map(chip).join('')}</div>` : '';
-  return row(options.slice(0, presets.length), '切换默认色板') + row(options.slice(presets.length), '切换修改的色板');
+  return row(options.filter(isPresetOption), '切换默认色板') + row(options.filter(p => !isPresetOption(p)), '切换修改的色板');
 }
 const editedMark = '<em class="palette-tab-edited">已修改</em>';
+const isPresetOption = p => presets.some(v => v.id === p.id);
 // Presets first; everything below the line is a scheme of the user's own.
-const paletteGroups = (options, item) => { const items = options.map(item); if (options.length > presets.length) items.splice(presets.length, 0, '<div class="palette-divider" role="separator"></div>'); return items.join(''); };
+const paletteGroups = (options, item) => { const items = options.map(item), first = options.filter(isPresetOption).length; if (first && options.length > first) items.splice(first, 0, '<div class="palette-divider" role="separator"></div>'); return items.join(''); };
 function paletteTabs() {
   const options = [...presets, ...state.saved].map(p => p.id === state.draft.id ? state.draft : state.presetEdits[p.id] || p);
   const known = options.some(p => p.id === state.draft.id);
   if (!known) options.push({...state.draft, id:'current', name:paletteLabel(state.draft)});
   const selected = known ? state.draft.id : 'current';
-  return `<div class="palette-tab-heading"><span>色板方案</span><div class="palette-heading-actions">${state.saved.some(p=>p.id===state.draft.id)&&!isPaletteLocked()?`<button class="text-button" data-action="rename-palette" aria-label="重命名当前色板">重命名</button>`:''}<button class="text-button" data-action="panel" data-value="import">＋ 导入</button></div></div><div class="palette-tabs" role="tablist" aria-label="色板方案">${paletteGroups(options,p=>`<div class="palette-tab-item ${state.saved.some(v=>v.id===p.id)?'can-delete':''}"><button role="tab" data-action="palette-tab" data-value="${esc(p.id)}" aria-selected="${p.id===selected}" tabindex="${p.id===selected?0:-1}" class="palette-tab ${p.id===selected?'active':''}" title="${esc(p.name)}${isPaletteLocked(p.id)?'（已锁定）':''}">${isPaletteLocked(p.id)?`<span class="palette-tab-lock" aria-label="已锁定">${icon('lock')}</span>`:''}<span>${esc(p.id==='current'?p.name:paletteLabel(p))}</span>${state.presetEdits[p.id]?editedMark:''}</button>${state.saved.some(v=>v.id===p.id)&&!isPaletteLocked(p.id)?`<button class="palette-tab-delete" data-action="delete-palette" data-value="${esc(p.id)}" aria-label="删除方案：${esc(p.name)}" title="删除方案">${icon('close')}</button>`:''}</div>`)}</div>`;
+  return `<div class="palette-tab-heading"><span>色板方案</span><div class="palette-heading-actions">${state.saved.some(p=>p.id===state.draft.id)&&!isPaletteLocked()?`<button class="text-button" data-action="rename-palette" aria-label="重命名当前色板">重命名</button>`:''}<button class="text-button" data-action="panel" data-value="import">＋ 导入</button></div></div><div class="palette-tabs" role="tablist" aria-label="色板方案">${paletteGroups(options,p=>`<div class="palette-tab-item ${state.saved.some(v=>v.id===p.id)?'can-delete':''}"><button role="tab" data-action="palette-tab" data-value="${esc(p.id)}" aria-selected="${p.id===selected}" tabindex="${p.id===selected?0:-1}" class="palette-tab ${p.id===selected?'active':''} ${isPaletteHidden(p.id)?'is-hidden':''}" title="${esc(p.name)}${isPaletteLocked(p.id)?'（已锁定）':''}${isPaletteHidden(p.id)?'（分享页已隐藏）':''}">${isPaletteHidden(p.id)?`<span class="palette-tab-lock" aria-label="分享页已隐藏">${icon('eyeOff')}</span>`:''}${isPaletteLocked(p.id)?`<span class="palette-tab-lock" aria-label="已锁定">${icon('lock')}</span>`:''}<span>${esc(p.id==='current'?p.name:paletteLabel(p))}</span>${state.presetEdits[p.id]?editedMark:''}</button></div>`)}</div>`;
 }
 function compactOklch(hex){
   const value=hexToOklch(hex);
@@ -723,13 +830,16 @@ app.addEventListener('contextmenu', event => {
   const tab = event.target.closest?.('.palette-tab[data-action="palette-tab"]');
   if (!tab || isLiveReadOnly()) return;
   event.preventDefault();
-  togglePaletteLock(tab.dataset.value === 'current' ? state.draft.id : tab.dataset.value);
+  const listed = tab.dataset.value !== 'current', box = tab.getBoundingClientRect();
+  // The keyboard's menu key fires without a pointer position, so the menu opens under the tab.
+  const byPointer = event.clientX || event.clientY;
+  openPaletteMenu(listed ? tab.dataset.value : state.draft.id, listed, byPointer ? event.clientX : box.left, byPointer ? event.clientY : box.bottom + 4, tab);
 });
 app.addEventListener('pointerdown', event => {
   const handle = event.target.closest?.('[data-color-drag]');
   if (handle && !event.button && !isLiveReadOnly()) startColorDrag(handle, event);
   const scheme = event.target.closest?.('.palette-tab-item.can-delete');
-  if (scheme && !event.button && !isLiveReadOnly() && !event.target.closest('.palette-tab-delete')) startSchemeDrag(scheme, event);
+  if (scheme && !event.button && !isLiveReadOnly()) startSchemeDrag(scheme, event);
 });
 app.addEventListener('keydown', event => {
   const handle = event.target.closest?.('[data-color-drag]');
@@ -784,17 +894,14 @@ app.addEventListener('click', async e => {
   if (action === 'fullscreen' || action === 'exit-fullscreen') { await setPreviewFullscreen(action === 'fullscreen'); return; }
   if (action === 'share-mobile') {
     if (!/^https?:$/.test(location.protocol)) { toast('请通过已部署的网址分享，离线文件可导出实验 JSON'); return; }
-    openModal(`${modalHead('分享预览')}<p>固定链接只读，配色和各场景的模块布局都会自动同步。手机打开只看 Aime 对话，可以切换主题和色板；电脑打开还能切换场景。查看者都不能编辑。</p><button class="button primary" data-modal-action="live-share">${live.role==='owner'?'复制固定链接':'获取固定链接'}</button><p class="editor-footnote">${live.role==='owner'?'编辑权限只保存在创建方案的浏览器中。':'同一浏览器会复用上次创建的链接；首次使用才新建。'}</p><button class="button" data-modal-action="snapshot-share">分享静态快照</button><p class="editor-footnote">静态快照只包含 Aime 对话；后续改色仍需重新分享。</p>${live.role==='owner'?'<button class="button" data-modal-action="live-copy">复制为新方案</button><p class="editor-footnote">生成独立副本，之后可创建新的固定链接，不影响当前链接。</p>':''}`);
+    openModal(`${modalHead('分享预览')}<p>固定链接只读，配色和各场景的模块布局都会自动同步。手机打开只看 Aime 对话，可以切换主题和色板；电脑打开还能切换场景。查看者都不能编辑。</p><button class="button primary" data-modal-action="live-share">${live.role==='owner'?'复制固定链接':'获取固定链接'}</button><p class="editor-footnote">${live.role==='owner'?esc(backupNote()):'同一浏览器会复用上次创建的链接；首次使用才新建。创建后色板会自动备份到云端。'}</p><button class="button" data-modal-action="snapshot-share">分享静态快照</button><p class="editor-footnote">静态快照只包含 Aime 对话；后续改色仍需重新分享。</p>${live.role==='owner'?'<button class="button" data-modal-action="live-copy">复制为新方案</button><p class="editor-footnote">生成独立副本，之后可创建新的固定链接，不影响当前链接。</p>':''}`);
     return;
   }
   if (action === 'scene') { state.scene = value; state.editorOpen = false; }
   if (action === 'scene-retry') lazyScenes[value].failed = false;
   if (action === 'rename-palette') {
-    const palette=state.saved.find(p=>p.id===state.draft.id);if(!palette)return;
-    openModal(`${modalHead('重命名色板')}<label for="rename-name">色板名称</label><input id="rename-name" class="modal-input" maxlength="80" value="${esc(palette.name)}" autocomplete="off"><div class="inline-error" id="rename-error" role="alert"></div><div class="modal-actions"><button class="button" data-modal-action="close">取消</button><button class="button primary" data-modal-action="rename-palette" data-value="${esc(palette.id)}">保存名称</button></div>`);
-    const field=document.querySelector('#rename-name');field.focus();field.select();field.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();modal.querySelector('[data-modal-action="rename-palette"]').click();}});return;
+    openRenameModal(state.draft.id);return;
   }
-  if (action === 'delete-palette') { deletePalette(value); return; }
   if (action === 'editor-close') state.editorOpen = false;
   if (action === 'editor-model') state.editorModel = value === 'hsb' ? 'hsb' : 'oklch';
   if (action === 'color-add' && !isPaletteLocked() && seriesRoles.includes(state.role)) {
@@ -919,7 +1026,9 @@ modal.addEventListener('click', async e => {
     if (!name) { document.querySelector('#save-name').focus(); return; }
     // The new scheme takes over a preset's edits, so the same colors are not listed twice.
     if (!isPaletteLocked()) delete state.presetEdits[state.draft.id];
-    state.draft = { ...clone(state.draft), id: crypto.randomUUID(), name }; state.saved.push(clone(state.draft)); state.saved = state.saved.slice(-30); persist(); modal.close(); render(); toast(`已保存「${name}」`);
+    // A copy of a hidden palette stays hidden until someone chooses to show it.
+    const copiedHidden = isPaletteHidden(state.draft.id);
+    state.draft = { ...clone(state.draft), id: crypto.randomUUID(), name }; if (copiedHidden) state.hiddenPalettes.push(state.draft.id); state.saved.push(clone(state.draft)); state.saved = state.saved.slice(-30); persist(); modal.close(); render(); toast(`已保存「${name}」`);
   }
   if (action === 'export-palette') { download(current(), 'palette-lab-colors.json'); modal.close(); toast('已导出色板文件'); }
   if (action === 'export-session') {

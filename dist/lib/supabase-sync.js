@@ -18,7 +18,7 @@ function createSupabaseLiveClient(config, { sdkLoader = () => import(new URL('..
     await client.realtime.setAuth(session.access_token);
     return client;
   })().catch(error => { initialization = null; throw error; });
-  const rpc = async (name, params) => {
+  const call = async (name, params) => {
     const client = await ready();
     const { data, error } = await client.rpc(name, params);
     if (error) {
@@ -26,6 +26,10 @@ function createSupabaseLiveClient(config, { sdkLoader = () => import(new URL('..
       const failure = new Error(error.code === 'PGRST202' ? 'Supabase 数据库脚本尚未执行，请先完成初始化' : error.message || 'Supabase 暂不可用');
       failure.status = status; throw failure;
     }
+    return data;
+  };
+  const rpc = async (name, params) => {
+    const data = await call(name, params);
     if (!data || typeof data.id !== 'string' || !Number.isSafeInteger(data.revision) || !data.snapshot) throw new Error('Supabase 返回了无效的方案');
     return data;
   };
@@ -33,6 +37,8 @@ function createSupabaseLiveClient(config, { sdkLoader = () => import(new URL('..
     create: (snapshot, token) => rpc('aime_create_live', { p_snapshot: snapshot, p_edit_token: token }),
     get: async id => { const record = await rpc('aime_join_live', { p_id: id }); joined.add(id); return record; },
     update: (id, token, revision, snapshot) => rpc('aime_update_live', { p_id: id, p_edit_token: token, p_revision: revision, p_snapshot: snapshot }),
+    readBackup: id => call('aime_read_backup', { p_id: id }),
+    saveBackup: (id, token, revision, data) => call('aime_save_backup', { p_id: id, p_edit_token: token, p_revision: revision, p_data: data }),
     subscribe(id, onSnapshot, onStatus) {
       let stopped = false, client, channel, timer, reading = false, connected = false;
       let lastRevision = 0;
