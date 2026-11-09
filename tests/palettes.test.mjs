@@ -298,3 +298,19 @@ test('default series names follow the position after moving, removing and loadin
  const stored=structuredClone(p);stored.themes.light.categorical.reverse();
  assert.deepEqual(validatePalette(stored).themes.light.categorical.map(c=>c.name),['系列 01','系列 02','主蓝']);
 });
+
+test('heatmap shades are a fixed seven-color role with defaults from rise and fall',async()=>{
+ const {createPalette,validatePalette,defaultHeatmap,heatmapNames}=await import('../dist/lib/palettes.js');
+ const original=createPalette({id:'a',name:'a',light:['#111111']});
+ assert.deepEqual(original.themes.light.heatmap.map(c=>c.hex).slice(1),['#009959','#2CBD80','#A3A6AD','#F77C7C','#F05045','#981400']);
+ assert.equal(original.themes.dark.heatmap[3].hex,'#5C5F66');
+ const p=createPalette({id:'b',name:'b',light:['#111111'],up:'#089981',down:'#F23645'});
+ assert.equal(p.themes.light.heatmap[1].hex,'#089981');assert.equal(p.themes.light.heatmap[5].hex,'#F23645');
+ const old=structuredClone(p);delete old.themes.light.heatmap;delete old.themes.dark.heatmap;
+ assert.deepEqual(validatePalette(old).themes.light.heatmap,defaultHeatmap('#089981','#F23645'));
+ const six=structuredClone(p);six.themes.light.heatmap.splice(3,1);six.themes.light.heatmap[0].hex='#111111';
+ const upgraded=validatePalette(six).themes.light.heatmap;assert.equal(upgraded.length,7);assert.equal(upgraded[0].hex,'#111111');assert.equal(upgraded[3].hex,'#A3A6AD');
+ const edited=structuredClone(p);edited.themes.dark.heatmap[0].hex='#123456';
+ const restored=validatePalette(edited).themes.dark.heatmap;
+ assert.equal(restored[0].hex,'#123456');assert.deepEqual(restored.map(c=>c.name),heatmapNames);
+});

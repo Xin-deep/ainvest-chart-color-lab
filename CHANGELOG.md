@@ -1,3 +1,12 @@
+## 0.26.0 · 2026-11-09
+
+- web 和 Terminal 里有对应组件的图表都换成 Vis Lab 组件，和财报分析、Aime 用同一套：web 的 Major 10-year bonds、24h Dominance、24h Crypto Market Cap、Crypto ETF Fund Flow、Global yield curves、Key interest rates；Terminal 的两个 ETF Holding Distribution（环状图、折柱图）、Quick Quote 的分组柱、多折线和面积图、Calendar 的百分比堆叠柱。卡片标题和按钮不变，图表随页面一起缩放，悬停提示和双击改色照常可用。
+- 没有对应组件或按要求保留的维持原样：Advancers & Decliners、Stock Heatmap、Fear & Greed、Altcoin Season、K 线和成交量、持仓分段条、P&L。
+- 单击这些图表会选中它，控制台的「图表设置」可以改数据项数、系列数量、DataZoom 缩放条开关、数据标签、主线面积、线条粗细和填充纹理（按图表类型显示），「恢复默认」撤回。数量变化后图表按同样的规律补齐或截短，卡片里的表格和标题不变；设置随固定链接同步给查看者。
+- Terminal 的 Quick Quote 分组柱和 Calendar 百分比堆叠柱换了数据，每天、每个系列的高低差拉开，不再几列看起来一样。
+- 去掉工作台的「去色」开关。「色值检验」里的「去色（只看明度）」保留。
+- 控制台新增「热力图」页签：web 的 Stock Heatmap 按涨跌幅分七档（涨 ≥5%、2–5%、0–2%，平 0%，跌 0–2%、2–5%、≥5%），每档颜色都能单独改。原始色板的涨跌沿用截图里的色值，其他色板按各自的涨跌色生成；平盘默认是中性灰（浅色 #A3A6AD，深色 #5C5F66）。热力图里 Turkish 一格改成 0.00%，用来展示平盘色。旧的方案载入时自动补上。
+
 ## 0.25.0 · 2026-11-09
 
 - 工作台主题切换旁新增「去色」开关：预览按相对亮度变成灰度，只看各颜色的明度差异，不改色板。只在本次打开时生效，刷新后恢复彩色；电脑查看页也能用。

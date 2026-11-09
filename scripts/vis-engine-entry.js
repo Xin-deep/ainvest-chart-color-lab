@@ -4,12 +4,13 @@ import { applyComparisonFixture } from './comparison-fixtures.js';
 import { applyChartLineWidth, installChartTexture } from './chart-appearance.js';
 import { financialChartConfig, financialPercent } from '../dist/data/financial-shared.js';
 import { aimeChartConfig } from '../dist/data/aime-reference.js';
+import { sceneChartConfig } from '../dist/data/scene-charts.js';
 import { surfaces } from '../dist/lib/palettes.js';
 import { CHARTS } from '../dist/vendor/vis-lab/source/demos/registry.js';
 import { EXAMPLES, buildConfig, examplesFor, densityOptionsOf, defaultDensityCountOf, densityRangeOf, capabilitiesOf } from '../dist/vendor/vis-lab/source/demos/examples.js';
 import tokensCSS from '../dist/vendor/vis-lab/source/tokens/tokens.css';
 import chartCSS from '../dist/vendor/vis-lab/source/charts/styles.css';
-const css = `${tokensCSS}\n${chartCSS}\n:host{display:block}*{box-sizing:border-box}.chart-host{width:100%;font-family:var(--font-family-cn);color:var(--color-text-primary)}.palette-chart-summary{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;pointer-events:none;line-height:1.45;color:var(--color-text-primary);white-space:nowrap}.palette-chart-summary span{font-size:10px;color:var(--color-text-secondary)}.palette-chart-summary strong{font-size:12px;font-weight:600}svg{flex-shrink:0}.dv-chart__plot{min-width:0}.chart-host.row-fill{flex:1;min-height:0}.chart-host[data-preset="financial-business"].dv-chart--legend-bottom,.chart-host[data-preset="financial-region"].dv-chart--legend-bottom,.chart-host[data-preset="aime-factors"].dv-chart--legend-bottom{flex-direction:column-reverse}.chart-host[data-preset="aime-growth"] .dv-line-point{opacity:0}`;
+const css = `${tokensCSS}\n${chartCSS}\n:host{display:block}*{box-sizing:border-box}.chart-host{width:100%;font-family:var(--font-family-cn);color:var(--color-text-primary)}.palette-chart-summary{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;pointer-events:none;line-height:1.45;color:var(--color-text-primary);white-space:nowrap}.palette-chart-summary span{font-size:10px;color:var(--color-text-secondary)}.palette-chart-summary strong{font-size:12px;font-weight:600}svg{flex-shrink:0}.dv-chart__plot{min-width:0}.chart-host.row-fill{flex:1;min-height:0}.chart-host[data-preset="financial-business"].dv-chart--legend-bottom,.chart-host[data-preset="financial-region"].dv-chart--legend-bottom,.chart-host[data-preset="aime-factors"].dv-chart--legend-bottom{flex-direction:column-reverse}.chart-host[data-preset="aime-growth"] .dv-line-point{opacity:0}.chart-host[data-preset="scene-dominance"] .dv-chart__legend{display:none}.chart-host[data-preset="scene-bonds"] .dv-line-point{opacity:0}`;
 const compactCatalog=examplesFor('index').map(e=>{
   const caps=capabilitiesOf(e),range=densityRangeOf(e);
   if(e.id==='treemap-entry')range.max=8;
@@ -17,8 +18,31 @@ const compactCatalog=examplesFor('index').map(e=>{
   return {id:e.id,name:e.title,group:e.group,chart:e.chart,count:defaultDensityCountOf(e),legacyCounts:e.chart==='cartesian'?[22,e.id==='grouped3'?16:e.id==='line-multi'?36:22]:e.chart==='pie'?[7]:[densityOptionsOf(e).many],series:e.indexSeriesRange?.default||1,seriesRange:e.indexSeriesRange||null,area:caps.area,range,labels:!!(caps.dataLabel||caps.labelLayout),fixed:!caps.density,summary:e.summary||'',height:'auto',span:e.chart==='sankey'?'full':'auto'};
 });
 let sharedSheet;
+// web and Terminal charts are laid out at the page's own size and shrunk with it by a CSS scale on their slot.
+// Vis Lab measures with getBoundingClientRect and clientX/Y, so inside a scaled slot both are given in the
+// slot's unscaled coordinates; its fixed tooltip is then placed in that same space, which the transform maps back.
+const scaledSlotOf=el=>{const host=el.getRootNode?.()?.host;return host?.classList?.contains('scene-chart-slot')?host:null;};
+const slotFrame=slot=>{const r=nativeRect.call(slot);return {left:r.left,top:r.top,k:slot.offsetWidth?r.width/slot.offsetWidth:1};};
+let nativeRect;
+// Installed on the first scaled slot, so loading the bundle without a DOM (tests) still works.
+function installScaledRects(){
+  if(nativeRect)return;nativeRect=Element.prototype.getBoundingClientRect;
+  Element.prototype.getBoundingClientRect=function(){
+    const rect=nativeRect.call(this),slot=scaledSlotOf(this);if(!slot)return rect;
+    const {left,top,k}=slotFrame(slot);return new DOMRect((rect.left-left)/k,(rect.top-top)/k,rect.width/k,rect.height/k);
+  };
+}
+function unscalePointer(event){
+  const slot=event.currentTarget,{left,top,k}=slotFrame(slot),x=(event.clientX-left)/k,y=(event.clientY-top)/k;
+  Object.defineProperties(event,{clientX:{value:x,configurable:true},clientY:{value:y,configurable:true}});
+}
+function watchScaledSlot(target){
+  if(!target.classList.contains('scene-chart-slot')||target.__paletteLabScaled)return;target.__paletteLabScaled=true;installScaledRects();
+  for(const type of ['mousemove','mouseover','mouseout','mouseenter','mouseleave','mousedown','mouseup','click','dblclick','pointermove','pointerover','pointerout','pointerdown','pointerup'])target.addEventListener(type,unscalePointer,{capture:true});
+}
 function mountCompactChart(target,module,palette,mode,onColor,density='compact',platform='pc') {
   if(target.hasAttribute('data-row-fill')){delete target.dataset.rowFill;target.style.removeProperty('min-height');}
+  watchScaledSlot(target);
   const shadow=target.shadowRoot||target.attachShadow({mode:'open'});
   shadow.replaceChildren();
   if('adoptedStyleSheets' in shadow){sharedSheet ||= new CSSStyleSheet();if(!sharedSheet.cssRules.length)sharedSheet.replaceSync(css);shadow.adoptedStyleSheets=[sharedSheet];}
@@ -42,6 +66,8 @@ function mountCompactChart(target,module,palette,mode,onColor,density='compact',
   for(const [index,variables] of [[1,['--color-background-layer1']],[2,['--color-text-primary']],[3,['--color-text-secondary','--color-text-axis','--color-text-legend']],[4,['--color-visualization-divider-deep']],[5,['--color-visualization-divider']]])
     if(colors.surface[index].hex!==surfaces[mode][index])for(const variable of variables)host.style.setProperty(variable,colors.surface[index].hex);
   for(const [key,value] of Object.entries({'--color-world-heatmap-primary':colors.categorical[0].hex,'--color-sankey-income':colors.categorical[0].hex,'--color-sankey-profit':colors.semantic[0].hex,'--color-sankey-expense':colors.semantic[1].hex,'--color-price-up':colors.semantic[0].hex,'--color-price-down':colors.semantic[1].hex}))host.style.setProperty(key,value);
+  if(['scene-bonds','scene-yield'].includes(module.fixture)){host.__paletteLabFormat=financialPercent;host.__paletteLabSecondaryFormat=financialPercent;}
+  if(module.fixture==='scene-cap')host.__paletteLabFormat=v=>`${Number((v/1e12).toFixed(2))}T`;
   if(module.fixture==='aime-growth')host.__paletteLabFormat=v=>v==null?'—':`${Math.round(v*100)}%`;
   if(['financial-trend','financial-payout'].includes(module.fixture)){
     host.__paletteLabFormat=v=>v!==0&&Math.abs(v)<2?financialPercent(v):new Intl.NumberFormat('en-US',{maximumFractionDigits:2}).format(v/1e9)+(v===0?'':'B');
@@ -59,7 +85,7 @@ function mountCompactChart(target,module,palette,mode,onColor,density='compact',
   const selected={...example,cfg:n=>sourceCfg(n,module.series)};
   let cfg=buildConfig(selected,{theme:'ainvest',platform:platform==='mobile'?'mobile':'pc',density:module.count,area:module.area==='on',dataLabel:module.labels,animation:false,legend:example.chart==='pie'&&module.labels==='on'?'bottom':'right',labelLayout:example.chart==='pie'&&module.labels==='on'?'outside':'off',legendSelect:'multi',radarEditable:'off'});
   cfg=applyComparisonFixture(cfg,module);
-  const fixture=financialChartConfig(module)||aimeChartConfig(module);if(fixture)Object.assign(cfg,fixture);
+  const fixture=financialChartConfig(module)||aimeChartConfig(module)||sceneChartConfig(module);if(fixture)Object.assign(cfg,fixture);
   cfg=completePiePreview(cfg,module);
   const instance=CHARTS[example.chart](host,cfg);
   instance.ready?.catch(()=>{host.textContent='地图加载失败，请检查网络';});

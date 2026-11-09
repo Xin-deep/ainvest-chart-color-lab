@@ -2,7 +2,7 @@ import { LIVE_ID_PATTERN, createEditToken, readOwner, readBackupRevision, saveBa
 import { encodeMobilePreview, decodeMobilePreview } from './lib/mobile-preview.js';
 import { bindColorJsPicker, loadColorJsPicker } from './lib/colorjs-picker.js';
 import { comparisonTemplates, createComparisonBoard, validateComparisonBoards, comparisonTemplatePanel } from './scenes/comparison.js';
-import { normalizeGlobalChartStyle } from './lib/chart-style.js';
+import { normalizeGlobalChartStyle, normalizeSceneCharts } from './lib/chart-style.js';
 import { defaultCheckSettings, normalizeCheckSettings, buildRowsCheckReport } from './lib/palette-checks.js';
 import { renderColorChecks, renderColorCheckBadges } from './scenes/color-checks.js';
 import { hexToOklch, checkOklch, oklchCss } from './lib/oklch.js';
@@ -19,7 +19,7 @@ import { financialChartModules, financialModulesFor } from './data/financial-sha
 
 import { defaultFinancialBoard, validateFinancialBoard, renderFinancialExtras } from './scenes/financial-extras.js';
 
-const VERSION = '0.25.0';
+const VERSION = '0.26.0';
 const STORAGE_KEY = 'ainvest-palette-lab:v1';
 const scenes = [
   { id: 'aime', name: 'Aime 对话', en: 'Aime conversation', icon: 'chat' },
@@ -61,7 +61,7 @@ const paths = {
 };
 const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.grid}</svg>`;
 const esc = text => String(text ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let state = { baseline: clone(presets[0]), draft: clone(presets[0]), scene: 'financial', theme: 'light', role: 'categorical', selected: 0, panel: 'palette', editorOpen: false, chartStyleOpen: false, editorModel: 'oklch', collapsed: innerWidth < 650, previewFullscreen: new URLSearchParams(location.search).get('preview') === 'fullscreen', saved: [], presetEdits: {}, lockedPalettes: [], hiddenPalettes: [], pnlTrend: 'up', grayscale: false, globalChartStyle: normalizeGlobalChartStyle(), checkSettings: defaultCheckSettings(), financialBoard: defaultFinancialBoard(), financialDensity: 'compact', customTemplate:'all', comparisonBoards:{}, customBoard: defaultCompactBoard(), aimeBoard: defaultAimeBoard() };
+let state = { baseline: clone(presets[0]), draft: clone(presets[0]), scene: 'financial', theme: 'light', role: 'categorical', selected: 0, panel: 'palette', editorOpen: false, chartStyleOpen: false, editorModel: 'oklch', collapsed: innerWidth < 650, previewFullscreen: new URLSearchParams(location.search).get('preview') === 'fullscreen', saved: [], presetEdits: {}, lockedPalettes: [], hiddenPalettes: [], pnlTrend: 'up', sceneCharts: {}, sceneSelected: null, globalChartStyle: normalizeGlobalChartStyle(), checkSettings: defaultCheckSettings(), financialBoard: defaultFinancialBoard(), financialDensity: 'compact', customTemplate:'all', comparisonBoards:{}, customBoard: defaultCompactBoard(), aimeBoard: defaultAimeBoard() };
 let storageAvailable = true, loaded = false;
 function restoreStoredPresetEdits(input) {
   const edits = restorePresetEdits(input, presets.map(p => p.id));
@@ -79,7 +79,7 @@ try {
       for (const theme of ['light', 'dark']) if (p.themes[theme].categorical.length === 8 && p.themes[theme].categorical[7].hex === '#9EA9C7') p.themes[theme].categorical.pop();
       p.source = presets[0].source;
     }
-    state = { ...state, editorModel: stored.editorModel === 'hsb' ? 'hsb' : 'oklch', customTemplate: [...comparisonTemplates.map(t=>t.id),'free'].includes(stored.customTemplate)?stored.customTemplate:'all', comparisonBoards:validateComparisonBoards(stored.comparisonBoards), globalChartStyle: normalizeGlobalChartStyle(stored.globalChartStyle), checkSettings: normalizeCheckSettings(stored.checkSettings), financialBoard: validateFinancialBoard(stored.financialBoard), financialDensity: stored.financialDensity === 'standard' ? 'standard' : 'compact', customBoard: validateCompactBoard(stored.customBoard), aimeBoard: validateAimeBoard(stored.aimeBoard), baseline: base, draft, scene: scenes.some(s => s.id === stored.scene) ? stored.scene : 'financial', collapsed: typeof stored.collapsed === 'boolean' ? stored.collapsed : state.collapsed, theme: ['light', 'dark'].includes(stored.theme) ? stored.theme : 'light', saved: (stored.saved || []).slice(-30).flatMap(p => { try { const v = validatePalette(p); v.id = p.id; return [v]; } catch { return []; } }), presetEdits: restoreStoredPresetEdits(stored.presetEdits) };
+    state = { ...state, editorModel: stored.editorModel === 'hsb' ? 'hsb' : 'oklch', customTemplate: [...comparisonTemplates.map(t=>t.id),'free'].includes(stored.customTemplate)?stored.customTemplate:'all', comparisonBoards:validateComparisonBoards(stored.comparisonBoards), globalChartStyle: normalizeGlobalChartStyle(stored.globalChartStyle), checkSettings: normalizeCheckSettings(stored.checkSettings), sceneCharts: normalizeSceneCharts(stored.sceneCharts), financialBoard: validateFinancialBoard(stored.financialBoard), financialDensity: stored.financialDensity === 'standard' ? 'standard' : 'compact', customBoard: validateCompactBoard(stored.customBoard), aimeBoard: validateAimeBoard(stored.aimeBoard), baseline: base, draft, scene: scenes.some(s => s.id === stored.scene) ? stored.scene : 'financial', collapsed: typeof stored.collapsed === 'boolean' ? stored.collapsed : state.collapsed, theme: ['light', 'dark'].includes(stored.theme) ? stored.theme : 'light', saved: (stored.saved || []).slice(-30).flatMap(p => { try { const v = validatePalette(p); v.id = p.id; return [v]; } catch { return []; } }), presetEdits: restoreStoredPresetEdits(stored.presetEdits) };
     state.lockedPalettes = restoreLockedPalettes(stored.lockedPalettes, [...presets, ...state.saved].map(p => p.id));
     state.hiddenPalettes = restoreLockedPalettes(stored.hiddenPalettes, [...presets, ...state.saved].map(p => p.id));
     loaded = true;
@@ -128,7 +128,7 @@ const requestedLiveId = liveParams.get('live') || liveParams.get('edit');
 const live = { role: requestedLiveId || mobileEntry ? 'viewer' : null, id: requestedLiveId, loading: !!requestedLiveId, ready: mobileEntry && !requestedLiveId, client: null, base: null, token: null, revision: 0, status: requestedLiveId ? '正在连接共享方案…' : '', error: '', pending: null, writing: false, lastJSON: '', timer: null, retry: null, stop: null, generation: 0, conflict: false, viewerTheme: null, viewerPalette: null, viewerScene: null, sharedPalettes: [], sharedPresetEdits: {}, sharedLocks: [], sharedHidden: [], backupState: '', backupRevision: 0, backupJSON: '', backupTimer: null, backupWriting: false, backupAgain: false };
 const isLiveReadOnly = () => live.role === 'viewer' || live.loading;
 if (requestedLiveId) { state.scene = 'aime'; state.collapsed = true; state.previewFullscreen = false; }
-function liveSnapshot() { return shareableSnapshot({ baseline: state.baseline, draft: state.draft, saved: state.saved, presetEdits: state.presetEdits, lockedPalettes: state.lockedPalettes, aimeBoard: state.aimeBoard, financialBoard: state.financialBoard, financialDensity: state.financialDensity, customBoard: state.customBoard, customTemplate: state.customTemplate, comparisonBoards: state.comparisonBoards, theme: state.theme, globalChartStyle: state.globalChartStyle }, state.hiddenPalettes, presets); }
+function liveSnapshot() { return shareableSnapshot({ baseline: state.baseline, draft: state.draft, saved: state.saved, presetEdits: state.presetEdits, lockedPalettes: state.lockedPalettes, aimeBoard: state.aimeBoard, financialBoard: state.financialBoard, financialDensity: state.financialDensity, customBoard: state.customBoard, customTemplate: state.customTemplate, comparisonBoards: state.comparisonBoards, theme: state.theme, globalChartStyle: state.globalChartStyle, sceneCharts: state.sceneCharts }, state.hiddenPalettes, presets); }
 // Links created before layouts were shared leave them out, and that must not reset the local boards.
 function snapshotLayouts(snapshot) {
   const layouts = {};
@@ -137,6 +137,7 @@ function snapshotLayouts(snapshot) {
   if (snapshot.customBoard) layouts.customBoard = validateCompactBoard(snapshot.customBoard);
   if ([...comparisonTemplates.map(t => t.id), 'free'].includes(snapshot.customTemplate)) layouts.customTemplate = snapshot.customTemplate;
   if (snapshot.comparisonBoards) layouts.comparisonBoards = validateComparisonBoards(snapshot.comparisonBoards);
+  if (snapshot.sceneCharts) layouts.sceneCharts = normalizeSceneCharts(snapshot.sceneCharts);
   return layouts;
 }
 function applyLiveSnapshot(snapshot) {
@@ -311,6 +312,46 @@ function repaintFinancialCharts(){
   const canvas=document.querySelector('#preview-canvas');
   mountCompactBoard(canvas,{modules:[...financialModulesFor(state.financialDensity),...state.financialBoard.modules],density:state.financialDensity,platform:'pc',globalChartStyle:state.globalChartStyle},current(),state.theme,(index,id,role='categorical')=>{if(isLiveReadOnly())return;if(state.financialBoard.modules.some(m=>m.id===id))state.financialBoard.selected=id;state.editorOpen=true;state.role=role;state.selected=index;state.panel='palette';state.collapsed=false;if(state.previewFullscreen)setPreviewFullscreen(false);else render();});
 }
+// web and Terminal lay Vis Lab charts over their cards at the page's own size, scaled with the page.
+let sceneChartObserver;
+function repaintSceneCharts() {
+  const canvas = document.querySelector('#preview-canvas'), layer = canvas?.querySelector('.scene-chart-layer');
+  const module = lazyScenes[state.scene]?.module, slots = module?.terminalChartSlots?.() || module?.workspaceChartSlots?.();
+  if (!layer || !slots) return;
+  const viewBoxWidth = layer.closest('main')?.querySelector('svg')?.viewBox.baseVal.width || 1;
+  const fit = () => layer.style.setProperty('--scene-scale', layer.clientWidth / viewBoxWidth);
+  fit();
+  sceneChartObserver?.disconnect();
+  sceneChartObserver = new ResizeObserver(fit);
+  sceneChartObserver.observe(layer);
+  const modules = slots.map(slot => { const value = { ...slot, ...state.sceneCharts[slot.id], height: slot.rect[3] }, { count, series } = sceneChartRanges(slot); value.count = Math.min(count.max, Math.max(count.min, value.count)); if (series) value.series = Math.min(series.max, Math.max(series.min, value.series)); return value; });
+  markSceneSelection();
+  mountCompactBoard(canvas, { modules, density: 'compact', platform: 'pc', globalChartStyle: state.globalChartStyle }, current(), state.theme, (index, id, role = 'categorical') => { if (isLiveReadOnly()) return; state.editorOpen = true; state.role = role; state.selected = index; state.panel = 'palette'; state.collapsed = false; if (state.previewFullscreen) setPreviewFullscreen(false); else render(); });
+}
+const sceneSlots = () => { const module = lazyScenes[state.scene]?.module; return module?.terminalChartSlots?.() || module?.workspaceChartSlots?.() || []; };
+function markSceneSelection() { for (const slot of document.querySelectorAll('.scene-chart-slot')) slot.classList.toggle('is-selected', !isLiveReadOnly() && slot.dataset.chartId === state.sceneSelected); }
+// Clicking a chart selects it for the settings panel without redrawing the page, so a double click still reaches the chart.
+function selectSceneChart(id) {
+  if (isLiveReadOnly() || !sceneSlots().some(slot => slot.id === id)) return;
+  const shellChanged = state.collapsed || state.previewFullscreen || state.panel !== 'palette';
+  state.sceneSelected = id; state.panel = 'palette'; state.collapsed = false;
+  if (shellChanged) { state.previewFullscreen = false; render(); return; }
+  markSceneSelection();
+  const side = document.querySelector('.side-scroll'); side.innerHTML = moduleSettingsPanel() + palettePanel(); side.scrollTop = 0; bindInputs();
+}
+// Data count and series follow the component's own limits; long lines keep their original point count as the top.
+function sceneChartRanges(slot) {
+  const def = compactTypes.find(type => type.id === slot.type);
+  return { count: { min: Math.max(2, def.range.min), max: Math.max(def.range.max, slot.count) }, series: def.seriesRange ? { min: def.seriesRange.min, max: def.seriesRange.max } : null };
+}
+function sceneChartPanel() {
+  const slot = sceneSlots().find(item => item.id === state.sceneSelected);
+  if (!slot) return '<section class="panel-section compact-settings"><div class="section-heading"><span class="section-label">图表设置</span></div><p class="editor-footnote">点击页面里的图表，可以调整它的数据标签、线条和纹理；双击图形改颜色。</p></section>';
+  const def = compactTypes.find(type => type.id === slot.type), m = { labels: 'off', zoom: 'off', ...slot, ...state.sceneCharts[slot.id] }, ranges = sceneChartRanges(slot);
+  const hasLine = def.chart === 'radar' || /^(line|combo)/.test(def.id), hasTexture = ['cartesian', 'pie', 'radar', 'hbar', 'waterfall'].includes(def.chart) && !['line', 'line-negative', 'line-multi'].includes(def.id);
+  const select = (field, label, options, value) => `<label>${label}<select data-scene-field="${field}" aria-label="${label}">${options.map(([v, n]) => `<option value="${v}" ${String(value) === String(v) ? 'selected' : ''}>${n}</option>`).join('')}</select></label>`;
+  return `<section class="panel-section compact-settings"><div class="section-heading"><span class="section-label">图表设置</span>${state.sceneCharts[slot.id] ? '<button class="text-button" data-action="scene-chart-reset">恢复默认</button>' : ''}</div><div class="compact-settings-title">${esc(slot.name)}<span>${esc(def.name)}</span></div><label>数据项数<input data-scene-field="count" type="number" min="${ranges.count.min}" max="${ranges.count.max}" value="${Math.min(ranges.count.max, Math.max(ranges.count.min, m.count))}"></label>${ranges.series ? `<label>系列数量<input data-scene-field="series" type="number" min="${ranges.series.min}" max="${ranges.series.max}" value="${Math.min(ranges.series.max, Math.max(ranges.series.min, m.series))}"></label>` : ''}${def.chart === 'cartesian' ? select('zoom', 'DataZoom 缩放条', [['off', '关'], ['on', '开']], m.zoom) : ''}${def.labels ? select('labels', '数据标签', [['auto', '默认规则'], ['on', '显示'], ['off', '隐藏']], m.labels) : ''}${hasLine && def.area ? select('area', '主线面积', [['on', '开'], ['off', '关']], m.area === 'on' ? 'on' : 'off') : ''}${hasLine ? select('lineWidth', '线条粗细', ['auto', .5, 1, 1.5, 2, 3].map(v => [v, v === 'auto' ? '默认' : v + ' px']), m.lineWidth ?? 'auto') : ''}${hasTexture ? select('texture', '填充纹理', [['none', '无纹理'], ['stripes', '斜线'], ['cross', '交叉线'], ['dots', '圆点']], m.texture || 'none') : ''}<p class="editor-footnote">数量改变后，图表按同样的规律补齐或截短数据；卡片里的表格和标题不变。</p></section>`;
+}
 function repaintCompactBoard() {
   const board=activeModuleBoard();
   mountCompactBoard(document.querySelector('#preview-canvas'), {...board,globalChartStyle:state.globalChartStyle}, current(), state.theme, (index, id, role = 'categorical') => { if (isLiveReadOnly()) return; board.selected = id; state.editorOpen = true; state.role = role; state.selected = index; state.panel = 'palette'; state.collapsed = false; if (state.previewFullscreen) setPreviewFullscreen(false); else render(); });
@@ -318,8 +359,6 @@ function repaintCompactBoard() {
 }
 let history = [], future = [], pendingImport = null, importedIndex = 0, editorTransaction = null, toastTimer, deletedScheme = null;
 const app = document.querySelector('#app'), modal = document.querySelector('#modal');
-// Relative luminance in linear RGB, matching the 「去色」 vision mode in the color checks.
-document.body.insertAdjacentHTML('beforeend', '<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><filter id="palette-lab-gray" color-interpolation-filters="linearRGB"><feColorMatrix type="matrix" values=".2126 .7152 .0722 0 0 .2126 .7152 .0722 0 0 .2126 .7152 .0722 0 0 0 0 0 1 0"/></filter></svg>');
 // These scenes carry large reference data, so they load when opened instead of with every page.
 const lazyScenes = {
   terminal: { load: () => import('./scenes/terminal.js'), module: null, pending: null, failed: false },
@@ -343,7 +382,7 @@ const current = () => viewerPick() || sharedPalette();
 // The console lists the colors the open scene really shows; edits still go to the palette itself.
 const shownPalette = (palette = current()) => state.scene === 'aime' ? aimeShownPalette(palette, state.theme) : palette;
 const selectedColor = () => state.draft.themes[state.theme][state.role][state.selected];
-const storedState = () => ({ schemaVersion: 1, toolVersion: VERSION, baseline: state.baseline, draft: state.draft, scene: state.scene, theme: state.theme, editorModel: state.editorModel, collapsed: state.collapsed, saved: state.saved, presetEdits: state.presetEdits, lockedPalettes: state.lockedPalettes, hiddenPalettes: state.hiddenPalettes, customTemplate:state.customTemplate, comparisonBoards:state.comparisonBoards, customBoard: state.customBoard, aimeBoard: state.aimeBoard, financialDensity: state.financialDensity, financialBoard: state.financialBoard, checkSettings: state.checkSettings, globalChartStyle: state.globalChartStyle });
+const storedState = () => ({ schemaVersion: 1, toolVersion: VERSION, baseline: state.baseline, draft: state.draft, scene: state.scene, theme: state.theme, editorModel: state.editorModel, collapsed: state.collapsed, saved: state.saved, presetEdits: state.presetEdits, lockedPalettes: state.lockedPalettes, hiddenPalettes: state.hiddenPalettes, customTemplate:state.customTemplate, comparisonBoards:state.comparisonBoards, customBoard: state.customBoard, aimeBoard: state.aimeBoard, financialDensity: state.financialDensity, financialBoard: state.financialBoard, checkSettings: state.checkSettings, globalChartStyle: state.globalChartStyle, sceneCharts: state.sceneCharts });
 function persist() {
   if (isLiveReadOnly()) return;
   writeBackDraft(state, presets);
@@ -445,7 +484,7 @@ function globalChartStylePanel(){
   const style=state.globalChartStyle;
   return `<details class="panel-section compact-settings chart-style-panel" ${state.chartStyleOpen?'open':''}><summary><span class="section-label">全局图表样式</span>${style.lineWidth!=='inherit'||style.texture!=='inherit'?'<span class="chart-style-active">已设置</span>':''}</summary><label>线条粗细<select data-global-chart-style="lineWidth" aria-label="全局线条粗细">${[['inherit','按模块设置'],['auto','统一默认'],...[.5,1,1.5,2,3].map(v=>[v,v+' px'])].map(([value,label])=>`<option value="${value}" ${style.lineWidth===value?'selected':''}>${label}</option>`).join('')}</select></label><label>面积纹理<select data-global-chart-style="texture" aria-label="全局面积纹理">${[['inherit','按模块设置'],['none','无纹理'],['stripes','斜线'],['cross','交叉线'],['dots','圆点']].map(([value,label])=>`<option value="${value}" ${style.texture===value?'selected':''}>${label}</option>`).join('')}</select></label><p class="editor-footnote">所有预览界面同步生效；全局设置优先于模块设置。</p></details>`;
 }
-function moduleSettingsPanel(){return globalChartStylePanel()+(['terminal','workspace'].includes(state.scene)?'':state.scene==='custom'?comparisonTemplatePanel(state.customTemplate)+compactBoardPanel(activeCustomBoard()):state.scene==='aime'?aimeBoardPanel(state.aimeBoard):financialDensityPanel());}
+function moduleSettingsPanel(){return globalChartStylePanel()+(['terminal','workspace'].includes(state.scene)?sceneChartPanel():state.scene==='custom'?comparisonTemplatePanel(state.customTemplate)+compactBoardPanel(activeCustomBoard()):state.scene==='aime'?aimeBoardPanel(state.aimeBoard):financialDensityPanel());}
 function selectPreviewModule(id){
   if (isLiveReadOnly()) return;
   const board=activeModuleBoard();if(!board.modules.some(module=>module.id===id))return;
@@ -485,13 +524,13 @@ function render() {
       ${readOnly && !live.ready ? `<div class="live-viewer-notice"><p>${esc(live.error || '正在载入共享方案…')}</p>${live.error?'<button class="button" data-action="live-reload">重试</button>':''}</div>` : ''}
       ${mobileAime && !state.collapsed ? '<button class="aime-workbench-backdrop" data-action="collapse" aria-label="关闭颜色工作台"></button>' : ''}
       <section class="preview-workspace" aria-label="场景预览工作区">
-        <div class="preview-canvas ${state.grayscale ? 'is-grayscale' : ''} ${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? 'has-scene' : ''}" id="preview-canvas" role="region" aria-label="${scene.name}${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? '，图表预览' : '，内容待添加'}" style="--canvas-bg:${palette.themes[state.theme].surface[0].hex}" data-scene="${state.scene}" data-theme="${state.theme}">${state.scene === 'financial' ? renderFinancialScene(renderFinancialExtras(state.financialBoard)) : state.scene === 'custom' ? renderCompactBoard(activeCustomBoard(),state.customTemplate==='free'?{}:{title:comparisonTemplates.find(t=>t.id===state.customTemplate).name,description:`全部 ${compactTypes.length} 种图表 · 每种少量 / 大量数据对比`}) : state.scene === 'aime' ? renderAimeScene(state.aimeBoard,state.theme,{themeSwitch:mobileAime?{disabled:readOnly&&!live.ready,status:readOnly&&live.id?liveDot():'',palettes:readOnly&&live.ready?viewerPaletteBar():''}:null}) : state.scene === 'terminal' ? (lazyScenes.terminal.module?.renderTerminalScene() ?? lazySceneHolder('terminal')) : state.scene === 'workspace' ? (lazyScenes.workspace.module?.renderWorkspaceTerminal({pnlTrend:state.pnlTrend}) ?? lazySceneHolder('workspace')) : ''}</div>
+        <div class="preview-canvas ${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? 'has-scene' : ''}" id="preview-canvas" role="region" aria-label="${scene.name}${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? '，图表预览' : '，内容待添加'}" style="--canvas-bg:${palette.themes[state.theme].surface[0].hex}" data-scene="${state.scene}" data-theme="${state.theme}">${state.scene === 'financial' ? renderFinancialScene(renderFinancialExtras(state.financialBoard)) : state.scene === 'custom' ? renderCompactBoard(activeCustomBoard(),state.customTemplate==='free'?{}:{title:comparisonTemplates.find(t=>t.id===state.customTemplate).name,description:`全部 ${compactTypes.length} 种图表 · 每种少量 / 大量数据对比`}) : state.scene === 'aime' ? renderAimeScene(state.aimeBoard,state.theme,{themeSwitch:mobileAime?{disabled:readOnly&&!live.ready,status:readOnly&&live.id?liveDot():'',palettes:readOnly&&live.ready?viewerPaletteBar():''}:null}) : state.scene === 'terminal' ? (lazyScenes.terminal.module?.renderTerminalScene() ?? lazySceneHolder('terminal')) : state.scene === 'workspace' ? (lazyScenes.workspace.module?.renderWorkspaceTerminal({pnlTrend:state.pnlTrend}) ?? lazySceneHolder('workspace')) : ''}</div>
       </section>
       ${isDesktopViewer() ? viewerToolbar() : `<aside class="sidebar" id="color-workbench" aria-label="颜色操作面板" ${readOnly?'inert':''}>
         <div class="sidebar-header">
           <div class="sidebar-title"><div class="workbench-heading"><span>颜色工作台</span><small>Palette Lab <span class="mono">v${VERSION}</span></small></div><div class="workbench-history"><button class="icon-button" data-action="undo" title="撤销（⌘/Ctrl Z）" aria-label="撤销" ${!history.length || isPaletteLocked() ? 'disabled' : ''}>${icon('undo')}</button><button class="icon-button" data-action="redo" title="重做（⌘/Ctrl Shift Z）" aria-label="重做" ${!future.length || isPaletteLocked() ? 'disabled' : ''}>${icon('redo')}</button><button class="icon-button" data-action="collapse" title="收起颜色工作台" aria-label="收起颜色工作台" aria-expanded="true">${icon('panel')}</button></div></div>
           ${mobileEntry ? '' : `<nav class="workbench-scenes" aria-label="产品使用场景">${scenes.map(s => `<button class="scene-tab ${s.id === state.scene ? 'active' : ''}" data-action="scene" data-value="${s.id}" aria-current="${s.id === state.scene ? 'page' : 'false'}">${s.name}</button>`).join('')}</nav>`}
-          <div class="workbench-controls">${themeSegment()}${grayscaleToggle()}</div>
+          <div class="workbench-controls">${themeSegment()}</div>
           <div class="workbench-actions"><button class="button primary" data-action="save" aria-label="另存为新方案">${icon('save')}另存为</button></div>
           <button class="button mobile-share-button" data-action="share-mobile">分享预览</button>
           ${paletteTabs()}
@@ -521,6 +560,7 @@ function render() {
   if (state.scene === 'financial') { applyFinancialPalette(canvas, palette, state.theme); repaintFinancialCharts(); }
   if (state.scene === 'terminal') lazyScenes.terminal.module?.applyTerminalPalette(canvas,palette,state.theme,state.globalChartStyle);
   if (state.scene === 'workspace') lazyScenes.workspace.module?.applyWorkspacePalette(canvas,palette,state.theme,state.globalChartStyle);
+  if (state.scene === 'terminal' || state.scene === 'workspace') repaintSceneCharts();
   // Charts stay hidden until a shared link connects, so skip drawing them twice.
   if (['custom','aime'].includes(state.scene) && !(isLiveReadOnly() && !live.ready)) repaintCompactBoard();
   const sceneScroller = canvas.querySelector('.financial-content-frame, .terminal-content-frame, .workspace-terminal-scroll, .compact-board-scroll, .aime-content-scroll') || canvas;
@@ -540,13 +580,11 @@ function viewerChoices() {
   if (ownerTab === 'current') options.push({ ...sharedPalette(), id: 'current', name: paletteLabel(state.draft) });
   return { options, selected };
 }
-// A view switch only: it greys the preview by relative luminance and never changes the palette.
-const grayscaleToggle = () => `<button class="button grayscale-toggle ${state.grayscale ? 'active' : ''}" data-action="grayscale" aria-pressed="${state.grayscale}" title="预览去色，只看明度差异">去色</button>`;
 const themeSegment = () => `<div class="segment" aria-label="预览主题"><button data-action="theme" data-value="light" class="${state.theme === 'light' ? 'active' : ''}" aria-pressed="${state.theme === 'light'}">${icon('sun')}浅色</button><button data-action="theme" data-value="dark" class="${state.theme === 'dark' ? 'active' : ''}" aria-pressed="${state.theme === 'dark'}">${icon('moon')}深色</button></div>`;
 // Computers get the choices a phone has plus the scenes; nothing here edits or saves the shared plan.
 function viewerToolbar() {
   const { options, selected } = viewerChoices();
-  return `<aside class="sidebar viewer-toolbar" id="color-workbench" aria-label="查看工具"><div class="sidebar-header"><div class="sidebar-title"><div class="workbench-heading"><span>查看配色</span><small>只读，你的选择不会影响原方案</small></div><div class="workbench-history"><button class="icon-button" data-action="viewer-collapse" title="收起工具栏" aria-label="收起工具栏" aria-expanded="true">${icon('panel')}</button></div></div><nav class="workbench-scenes" aria-label="产品使用场景">${scenes.map(s => `<button class="scene-tab ${s.id === state.scene ? 'active' : ''}" data-action="viewer-scene" data-value="${s.id}" aria-current="${s.id === state.scene ? 'page' : 'false'}">${s.name}</button>`).join('')}</nav><div class="workbench-controls">${themeSegment()}${grayscaleToggle()}</div></div><div class="side-scroll"><div class="palette-tab-heading"><span>色板方案</span></div><div class="palette-tabs" role="tablist" aria-label="色板方案">${paletteGroups(options, p => `<div class="palette-tab-item"><button role="tab" data-action="viewer-palette" data-value="${esc(p.id)}" aria-selected="${p.id === selected}" tabindex="${p.id === selected ? 0 : -1}" class="palette-tab ${p.id === selected ? 'active' : ''}" title="${esc(p.name)}">${viewerLockMark(p)}<span>${esc(p.id === 'current' ? p.name : paletteLabel(p))}</span></button></div>`)}</div></div><div class="sidebar-footer"><span class="live-sync-status">${esc(live.status)}</span></div></aside>`;
+  return `<aside class="sidebar viewer-toolbar" id="color-workbench" aria-label="查看工具"><div class="sidebar-header"><div class="sidebar-title"><div class="workbench-heading"><span>查看配色</span><small>只读，你的选择不会影响原方案</small></div><div class="workbench-history"><button class="icon-button" data-action="viewer-collapse" title="收起工具栏" aria-label="收起工具栏" aria-expanded="true">${icon('panel')}</button></div></div><nav class="workbench-scenes" aria-label="产品使用场景">${scenes.map(s => `<button class="scene-tab ${s.id === state.scene ? 'active' : ''}" data-action="viewer-scene" data-value="${s.id}" aria-current="${s.id === state.scene ? 'page' : 'false'}">${s.name}</button>`).join('')}</nav><div class="workbench-controls">${themeSegment()}</div></div><div class="side-scroll"><div class="palette-tab-heading"><span>色板方案</span></div><div class="palette-tabs" role="tablist" aria-label="色板方案">${paletteGroups(options, p => `<div class="palette-tab-item"><button role="tab" data-action="viewer-palette" data-value="${esc(p.id)}" aria-selected="${p.id === selected}" tabindex="${p.id === selected ? 0 : -1}" class="palette-tab ${p.id === selected ? 'active' : ''}" title="${esc(p.name)}">${viewerLockMark(p)}<span>${esc(p.id === 'current' ? p.name : paletteLabel(p))}</span></button></div>`)}</div></div><div class="sidebar-footer"><span class="live-sync-status">${esc(live.status)}</span></div></aside>`;
 }
 // Presets on the first row, the user's own schemes on a second one when there are any.
 function viewerPaletteBar() {
@@ -586,7 +624,7 @@ function palettePanel() {
   state.selected = Math.min(state.selected, colors.length - 1);
   const color = colors[state.selected], base = shownPalette(state.baseline).themes[state.theme][state.role][state.selected], hsv = hexToHsv(color.hex), locked = isPaletteLocked(), editable = seriesRoles.includes(state.role) && !locked, hsb = state.editorModel === 'hsb';
   return `<section class="panel-section"><div class="section-heading"><span class="section-label">Palette / 当前色板</span><button class="text-button" data-action="reset" ${!changedCount() || locked ? 'disabled' : ''}>恢复原始</button></div><div class="active-palette-name">${esc(p.name)}</div>${locked ? `<div class="palette-lock-note">${icon('lock')}已锁定，不会被修改。右键色板标签可解锁，或用「另存为」复制一份再改</div>` : ''}<div class="preset-source">${esc(p.source)}</div>${!p.availableThemes.includes(state.theme) ? '<div class="theme-warning">当前主题为实验复用色值，未经竞品来源确认。</div>' : ''}</section>
-    <section class="panel-section"><div class="section-heading"><span class="section-label">Colors / 颜色角色</span><span class="mono muted" style="font-size:9px">${state.theme === 'light' ? 'LIGHT' : 'DARK'}</span></div><div class="role-tabs" aria-label="颜色角色">${Object.entries(roles).filter(([id]) => id !== 'neutral').map(([id, name]) => `<button class="${listRole(state.role) === id ? 'active' : ''}" data-action="role" data-value="${id}" aria-pressed="${listRole(state.role) === id}">${name}<small>${p.themes[state.theme][id].length + (id === 'semantic' ? 1 : 0)}</small></button>`).join('')}</div><div class="color-list">${rows.map(([role, i], row) => { const c = p.themes[state.theme][role][i], key = colorRowKey(role, i), open = state.editorOpen && state.role === role && state.selected === i; return `<div class="color-item">${editable && colors.length > 1 ? `<button class="color-drag" data-color-drag="${i}" aria-label="调整「${esc(c.name)}」的顺序，可拖动或按上下方向键" title="拖动调整顺序">${icon('grip')}</button>` : ''}<button class="color-row ${open ? 'selected' : ''}" data-action="color" data-value="${i}" data-role="${role}" aria-label="${esc(c.name)} ${c.hex}" aria-pressed="${open}" aria-expanded="${open}"><span class="color-index mono">${String(i + 1).padStart(2, '0')}</span><i class="swatch" style="background:${c.hex}" data-swatch="${key}"></i><span class="color-description"><span class="color-main"><span class="color-name">${esc(c.name)}</span><span class="color-value mono" data-color-value="${key}">${c.hex}</span></span><span class="color-oklch mono" data-oklch="${key}">${compactOklch(c.hex)}</span><span class="color-check-badges" data-color-checks="${row}">${renderColorCheckBadges(report.entries[row],report)}</span></span>${c.hex !== state.baseline.themes[state.theme][role][i]?.hex ? '<i class="changed-dot"></i>' : ''}${open ? icon('sliders') : ''}</button>${editable && colors.length > 1 ? `<button class="color-remove" data-action="color-remove" data-value="${i}" aria-label="删除「${esc(c.name)}」" title="删除颜色">${icon('close')}</button>` : ''}</div>`; }).join('')}</div>${editable && colors.length < 64 ? '<button class="text-button color-add" data-action="color-add">＋ 添加颜色</button>' : ''}<div class="colors-note">${icon('info')}${state.role === 'line' ? '只用于折柱图里的折线，柱子用分类色；顺序和增删同时作用于浅色、深色' : state.role === 'categorical' ? '顺序和增删同时作用于浅色、深色；色值分主题修改' : '仅修改当前角色，其他用途保持独立'}</div></section>
+    <section class="panel-section"><div class="section-heading"><span class="section-label">Colors / 颜色角色</span><span class="mono muted" style="font-size:9px">${state.theme === 'light' ? 'LIGHT' : 'DARK'}</span></div><div class="role-tabs" aria-label="颜色角色">${Object.entries(roles).filter(([id]) => id !== 'neutral').map(([id, name]) => `<button class="${listRole(state.role) === id ? 'active' : ''}" data-action="role" data-value="${id}" aria-pressed="${listRole(state.role) === id}">${name}<small>${p.themes[state.theme][id].length + (id === 'semantic' ? 1 : 0)}</small></button>`).join('')}</div><div class="color-list">${rows.map(([role, i], row) => { const c = p.themes[state.theme][role][i], key = colorRowKey(role, i), open = state.editorOpen && state.role === role && state.selected === i; return `<div class="color-item">${editable && colors.length > 1 ? `<button class="color-drag" data-color-drag="${i}" aria-label="调整「${esc(c.name)}」的顺序，可拖动或按上下方向键" title="拖动调整顺序">${icon('grip')}</button>` : ''}<button class="color-row ${open ? 'selected' : ''}" data-action="color" data-value="${i}" data-role="${role}" aria-label="${esc(c.name)} ${c.hex}" aria-pressed="${open}" aria-expanded="${open}"><span class="color-index mono">${String(i + 1).padStart(2, '0')}</span><i class="swatch" style="background:${c.hex}" data-swatch="${key}"></i><span class="color-description"><span class="color-main"><span class="color-name">${esc(c.name)}</span><span class="color-value mono" data-color-value="${key}">${c.hex}</span></span><span class="color-oklch mono" data-oklch="${key}">${compactOklch(c.hex)}</span><span class="color-check-badges" data-color-checks="${row}">${renderColorCheckBadges(report.entries[row],report)}</span></span>${c.hex !== state.baseline.themes[state.theme][role][i]?.hex ? '<i class="changed-dot"></i>' : ''}${open ? icon('sliders') : ''}</button>${editable && colors.length > 1 ? `<button class="color-remove" data-action="color-remove" data-value="${i}" aria-label="删除「${esc(c.name)}」" title="删除颜色">${icon('close')}</button>` : ''}</div>`; }).join('')}</div>${editable && colors.length < 64 ? '<button class="text-button color-add" data-action="color-add">＋ 添加颜色</button>' : ''}<div class="colors-note">${icon('info')}${state.role === 'line' ? '只用于折柱图里的折线，柱子用分类色；顺序和增删同时作用于浅色、深色' : state.role === 'categorical' ? '顺序和增删同时作用于浅色、深色；色值分主题修改' : state.role === 'heatmap' ? '用于 web 的 Stock Heatmap，涨跌各三档加一档平盘；数量和顺序固定' : '仅修改当前角色，其他用途保持独立'}</div></section>
     ${state.editorOpen ? `<section class="panel-section color-editor"><div class="editor-heading"><span class="editor-name"><span>编辑</span>${esc(color.name)}</span><div class="editor-tools"><div class="segment editor-model" aria-label="调色模式">${[['oklch', 'OKLCH'], ['hsb', 'HSB']].map(([id, name]) => `<button data-action="editor-model" data-value="${id}" class="${state.editorModel === id ? 'active' : ''}" aria-pressed="${state.editorModel === id}">${name}</button>`).join('')}</div>${editable && colors.length > 1 ? `<button class="icon-button" data-action="color-remove" data-value="${state.selected}" aria-label="删除此颜色" title="删除此颜色">${icon('trash')}</button>` : ''}<button class="icon-button" data-action="editor-close" aria-label="收起颜色编辑器">${icon('close')}</button></div></div><div class="color-inputs"><label class="picker-wrap" style="background:${color.hex}" title="打开颜色选择器"><input type="color" id="native-color" value="${color.hex}" aria-label="${esc(color.name)}颜色选择器" ${locked ? 'disabled' : ''}></label><label class="hex-field"><span>HEX</span><input class="mono" id="hex-input" value="${color.hex}" maxlength="64" aria-label="色值，支持 HEX、RGB、HSL" spellcheck="false" ${locked ? 'disabled' : ''}></label><button class="icon-button" data-action="copy-color" title="复制色值" aria-label="复制色值">${icon('copy')}</button></div><div class="colorjs-picker-shell" ${hsb ? '' : 'data-colorjs-picker'}>${hsb ? '' : `<color-picker space="oklch" color="${color.hex}" gamut="none" aria-label="OKLCH 颜色选择器"><span slot="color-space" class="picker-space-name">OKLCH</span></color-picker>`}<div class="hsb-fallback">${['H 色相', 'S 饱和', 'B 亮度'].map((label, i) => `<div class="slider-row"><label for="slider-${i}" title="${label}">${label[0]}</label><input id="slider-${i}" data-hsv="${i}" type="range" min="0" max="${i === 0 ? 359 : 100}" step="1" value="${Math.round(hsv[i])}" aria-label="${label}" ${locked ? 'disabled' : ''} style="background:${i === 0 ? 'linear-gradient(to right,#ff7777,#dddd55,#55cc88,#55cddd,#7777ee,#dd77dd,#ff7777)' : i === 1 ? `linear-gradient(to right,#ddd,${hsvToHex(hsv[0], 100, 100)})` : `linear-gradient(to right,#222,${hsvToHex(hsv[0], hsv[1], 100)})`}"><span class="hsv-number mono"><input id="output-${i}" data-hsv-number="${i}" type="number" min="0" max="${i === 0 ? 359 : 100}" step="1" value="${Math.round(hsv[i])}" aria-label="${label}数值" ${locked ? 'disabled' : ''}><span aria-hidden="true">${i === 0 ? '°' : '%'}</span></span></div>`).join('')}</div>${hsb ? '' : '<p class="picker-status" data-picker-status role="status">正在加载 Color.js 选色器…</p>'}</div><div class="oklch-readout" id="oklch-readout">${oklchDetails(color.hex)}<div class="color-check-badges" data-editor-checks>${renderColorCheckBadges(report.entries[listRowIndex(rows, state.role, state.selected)],report)}</div></div><div class="mini-diff"><i style="background:${base?.hex || '#FFFFFF'}"></i><span class="mono">${base?.hex || '新增'}</span>${icon('arrow')}<i id="after-swatch" style="background:${color.hex}"></i><span id="after-hex" class="mono">${color.hex}</span></div><div class="editor-footnote">修改应用于${state.theme === 'light' ? '浅色' : '深色'}主题的「${roles[state.role]}」。<br>RGB <span class="mono" id="rgb-value">${rgbText(color.hex)}</span></div></section>` : ''}`;
 }
 let importText = '', importError = '', importInputMode = 'text', importLightText = '', importDarkText = '', importName = '';
@@ -660,6 +698,7 @@ function liveColor(hex) {
   if (state.scene === 'financial') { applyFinancialPalette(document.querySelector('#preview-canvas'), current(), state.theme); cancelAnimationFrame(compactColorFrame);compactColorFrame=requestAnimationFrame(repaintFinancialCharts); }
   if (state.scene === 'terminal') lazyScenes.terminal.module?.applyTerminalPalette(document.querySelector('#preview-canvas'),current(),state.theme,state.globalChartStyle);
   if (state.scene === 'workspace') lazyScenes.workspace.module?.applyWorkspacePalette(document.querySelector('#preview-canvas'),current(),state.theme,state.globalChartStyle);
+  if (state.scene === 'terminal' || state.scene === 'workspace') { cancelAnimationFrame(compactColorFrame); compactColorFrame = requestAnimationFrame(repaintSceneCharts); }
   if (['custom','aime'].includes(state.scene)) { cancelAnimationFrame(compactColorFrame); compactColorFrame = requestAnimationFrame(repaintCompactBoard); }
 }
 function bindInputs() {
@@ -704,6 +743,12 @@ function bindInputs() {
     persist();const side=document.querySelector('.side-scroll'),scroll=side.scrollTop;side.innerHTML=renderColorChecks(shownPalette(),state.theme,state.role,state.checkSettings);side.scrollTop=scroll;bindInputs();
   });
   document.querySelector('#import-name')?.addEventListener('input',e=>{importName=e.target.value;const preview=document.querySelector('.import-preview-name');if(preview&&pendingImport?.candidates?.[importedIndex])preview.textContent=importName.trim()||pendingImport.candidates[importedIndex].name;});
+  for (const input of document.querySelectorAll('[data-scene-field]')) input.addEventListener('change', () => {
+    const id = state.sceneSelected; if (!id) return;
+    const field = input.dataset.sceneField, value = input.type === 'number' ? Math.min(Number(input.max), Math.max(Number(input.min), Math.round(Number(input.value) || Number(input.min)))) : input.value;
+    state.sceneCharts = normalizeSceneCharts({ ...state.sceneCharts, [id]: { ...state.sceneCharts[id], [field]: value } });
+    persist(); render();
+  });
   for (const input of document.querySelectorAll('[data-module-field]')) input.addEventListener('change', () => {
     const module = activeModuleBoard().modules.find(m => m.id === activeModuleBoard().selected);
     const field = input.dataset.moduleField;
@@ -869,12 +914,6 @@ app.addEventListener('click', async e => {
   const liveAction = e.target.closest('[data-action]')?.dataset.action;
   // A preview switch rather than an edit, so viewers can use it too.
   if (liveAction === 'pnl-trend') { state.pnlTrend = e.target.closest('[data-action]').dataset.value === 'down' ? 'down' : 'up'; render(); return; }
-  if (liveAction === 'grayscale') {
-    state.grayscale = !state.grayscale;
-    document.querySelector('#preview-canvas')?.classList.toggle('is-grayscale', state.grayscale);
-    for (const button of document.querySelectorAll('[data-action="grayscale"]')) { button.classList.toggle('active', state.grayscale); button.setAttribute('aria-pressed', state.grayscale); }
-    return;
-  }
   if (liveAction === 'live-reload') { await connectLive(); return; }
   if (liveAction === 'live-copy') { copyLiveSession(); return; }
   if (liveAction === 'theme' && live.role === 'viewer' && live.ready) {
@@ -894,6 +933,8 @@ app.addEventListener('click', async e => {
     if (liveAction === 'scene-retry') { lazyScenes[viewerTarget.dataset.value].failed = false; render(); return; }
   }
   if (isLiveReadOnly()) return;
+  const sceneSlot = e.target.closest('.scene-chart-slot');
+  if (sceneSlot && ['terminal', 'workspace'].includes(state.scene)) { selectSceneChart(sceneSlot.dataset.chartId); return; }
   const card=e.target.closest('[data-module-id]'),cardAction=e.target.closest('[data-action]');
   if(card&&(!cardAction||cardAction.dataset.action==='module-select')){selectPreviewModule(card.dataset.moduleId);return;}
   const mark = e.target.closest('[data-color-role]');
@@ -958,6 +999,7 @@ app.addEventListener('click', async e => {
   }
   if (action === 'module-duplicate') { const selected = activeModuleBoard().modules.find(m => m.id === activeModuleBoard().selected); if(selected && activeModuleBoard().modules.length < 60) { const added = {...selected, id:crypto.randomUUID()}; activeModuleBoard().modules.splice(activeModuleBoard().modules.indexOf(selected)+1,0,added); activeModuleBoard().selected=added.id; } }
   if (action === 'module-remove') { activeModuleBoard().modules=activeModuleBoard().modules.filter(m=>m.id!==activeModuleBoard().selected); activeModuleBoard().selected=activeModuleBoard().modules.find(m=>!m.hidden)?.id; }
+  if (action === 'scene-chart-reset') delete state.sceneCharts[state.sceneSelected];
   if (action === 'theme') { state.theme = value; state.editorOpen = false; }
   if (action === 'collapse') state.collapsed = !state.collapsed;
   if (action === 'panel') { state.panel = value; state.editorOpen = false; }
@@ -987,7 +1029,7 @@ app.addEventListener('click', async e => {
   if (action === 'parse') { try { pendingImport = importInputMode === 'text' ? {candidates:[parseTextPalette(importLightText,importDarkText)]} : parseImport(importText); importedIndex = 0; importError = ''; } catch (error) { pendingImport = null; importError = error.message; } }
   if (action === 'apply-import' && pendingImport) {
     if (pendingImport.session) {
-      const s = pendingImport.session; state.customTemplate=[...comparisonTemplates.map(t=>t.id),'free'].includes(s.customTemplate)?s.customTemplate:'all';state.comparisonBoards=validateComparisonBoards(s.comparisonBoards); state.globalChartStyle=normalizeGlobalChartStyle(s.globalChartStyle); state.checkSettings=normalizeCheckSettings(s.checkSettings); state.financialBoard = validateFinancialBoard(s.financialBoard); state.financialDensity = s.financialDensity === 'standard' ? 'standard' : 'compact'; if (s.customBoard) state.customBoard = validateCompactBoard(s.customBoard); if(s.aimeBoard)state.aimeBoard=validateAimeBoard(s.aimeBoard); writeBackDraft(state, presets); adoptDraft(); state.baseline = clone(s.baseline); state.draft = clone(s.draft); state.draft.id = crypto.randomUUID(); state.baseline.id = state.draft.id;
+      const s = pendingImport.session; state.customTemplate=[...comparisonTemplates.map(t=>t.id),'free'].includes(s.customTemplate)?s.customTemplate:'all';state.comparisonBoards=validateComparisonBoards(s.comparisonBoards); state.globalChartStyle=normalizeGlobalChartStyle(s.globalChartStyle); state.checkSettings=normalizeCheckSettings(s.checkSettings); state.sceneCharts=normalizeSceneCharts(s.sceneCharts); state.financialBoard = validateFinancialBoard(s.financialBoard); state.financialDensity = s.financialDensity === 'standard' ? 'standard' : 'compact'; if (s.customBoard) state.customBoard = validateCompactBoard(s.customBoard); if(s.aimeBoard)state.aimeBoard=validateAimeBoard(s.aimeBoard); writeBackDraft(state, presets); adoptDraft(); state.baseline = clone(s.baseline); state.draft = clone(s.draft); state.draft.id = crypto.randomUUID(); state.baseline.id = state.draft.id;
       state.scene = mobileEntry ? 'aime' : scenes.some(v => v.id === s.scene) ? s.scene : 'financial'; state.theme = ['light', 'dark'].includes(s.theme) ? s.theme : 'light'; history = []; future = [];
     } else { const p = clone(pendingImport.candidates[importedIndex]); p.name = importName.trim() || p.name; p.id = crypto.randomUUID(); const sourceName=p.name;let suffix=2;while([...presets,...state.saved].some(v=>v.name===p.name))p.name=sourceName+' '+suffix++;state.saved.push(clone(p)); state.saved = state.saved.slice(-30); applyPalette(p); }
     state.panel = 'palette'; state.editorOpen = false; state.role = 'categorical'; state.selected = 0; pendingImport = null; toast('已导入，可以开始调整颜色');
@@ -1046,7 +1088,7 @@ modal.addEventListener('click', async e => {
   }
   if (action === 'export-palette') { download(current(), 'palette-lab-colors.json'); modal.close(); toast('已导出色板文件'); }
   if (action === 'export-session') {
-    download({ kind: 'palette-lab-session', schemaVersion: 1, toolVersion: VERSION, exportedAt: new Date().toISOString(), scene: state.scene, theme: state.theme, baseline: state.baseline, draft: state.draft, customTemplate:state.customTemplate, comparisonBoards:state.comparisonBoards, customBoard: state.customBoard, aimeBoard: state.aimeBoard, financialDensity: state.financialDensity, financialBoard: state.financialBoard, checkSettings: state.checkSettings, globalChartStyle: state.globalChartStyle }, 'palette-lab-experiment.json'); modal.close(); toast('已导出完整实验文件');
+    download({ kind: 'palette-lab-session', schemaVersion: 1, toolVersion: VERSION, exportedAt: new Date().toISOString(), scene: state.scene, theme: state.theme, baseline: state.baseline, draft: state.draft, customTemplate:state.customTemplate, comparisonBoards:state.comparisonBoards, customBoard: state.customBoard, aimeBoard: state.aimeBoard, financialDensity: state.financialDensity, financialBoard: state.financialBoard, checkSettings: state.checkSettings, globalChartStyle: state.globalChartStyle, sceneCharts: state.sceneCharts }, 'palette-lab-experiment.json'); modal.close(); toast('已导出完整实验文件');
   }
 });
 modal.addEventListener('click', e => { if (e.target === modal) { const r = modal.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) modal.close(); } });

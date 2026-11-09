@@ -31,3 +31,7 @@ export function rampColor(low,middle,high,t){
  const linear=oklchToLinearSrgb({l,c:Math.hypot(x,y),h:Math.atan2(y,x)*180/Math.PI});
  return '#'+linear.map(v=>{const clipped=Math.min(1,Math.max(0,v)),encoded=clipped<=.0031308?12.92*clipped:1.055*clipped**(1/2.4)-.055;return Math.round(encoded*255).toString(16).padStart(2,'0');}).join('').toUpperCase();
 }
+// Clips to sRGB; used for derived shades where an exact gamut mapping is not needed.
+export function oklchToHex(value){
+ return '#'+oklchToLinearSrgb(value).map(v=>{const clipped=Math.min(1,Math.max(0,v)),encoded=clipped<=.0031308?12.92*clipped:1.055*clipped**(1/2.4)-.055;return Math.round(encoded*255).toString(16).padStart(2,'0');}).join('').toUpperCase();
+}

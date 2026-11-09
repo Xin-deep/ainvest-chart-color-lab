@@ -7,7 +7,7 @@ import {presets} from '../dist/data/presets.js';
 test('desktop workspace keeps all eleven widgets, source labels and measured chart paths',()=>{
  const html=renderWorkspaceTerminal();
  assert.equal((html.match(/data-workspace-widget=/g)||[]).length,11);
- for(const label of ['BBD ·1D ·NASDAQ','Date:2024-09-19 Friday','VOLUME:12.98','ETF Holding Distribution','155.25M','News Wire','Sunday Jul20,2025','Sep 24,2026','Popular Portfolios','AIME Super Portfolio','Floating Rate Reserve','Total Account Value','$51,996.13','+$467.89 (+0.13%)'])assert.ok(html.includes(label),label);
+ for(const label of ['BBD ·1D ·NASDAQ','Date:2024-09-19 Friday','VOLUME:12.98','ETF Holding Distribution','News Wire','Sunday Jul20,2025','Sep 24,2026','Popular Portfolios','AIME Super Portfolio','Floating Rate Reserve','Total Account Value','$51,996.13','+$467.89 (+0.13%)'])assert.ok(html.includes(label),label);
  assert.ok(!html.includes('undefined'));assert.match(html,/viewBox="63 37 1718 1339"/);
  for(const theme of ['light','dark']){
   const ref=workspaceReference[theme];
@@ -27,19 +27,12 @@ test('workspace theme surfaces and series update independently of the web scene'
  applyWorkspacePalette(host,palette,'light');assert.equal(vars.get('--ws-frame'),'#F4F5F7');assert.equal(vars.get('--term-bg'),'#FFFFFF');assert.equal(mark.style.color,'#265FFC');
 });
 
-test('the holding donut and sector strip each show seven items',()=>{
+test('the sector strip shows seven items and the other charts are component slots',()=>{
  const html=renderWorkspaceTerminal();
- assert.equal(html.match(/<path[^>]*stroke-width="\.5" data-terminal-area\/>/g)?.length,7);
+ assert.deepEqual([...html.matchAll(/data-chart-id="([^"]+)"/g)].map(m=>m[1]),['terminal-etf','terminal-cap','terminal-dominance','terminal-yield','terminal-rates','terminal-bonds']);
  assert.equal(html.match(/<rect[^>]*y="742"[^>]*data-terminal-area/g)?.length,7);
  const widths=[...html.matchAll(/<rect x="[\d.]+" y="742" width="([\d.]+)"/g)].reduce((sum,m)=>sum+Number(m[1]),0);
  assert.ok(Math.abs(widths-377)<.01);
-});
-
-test('the yield combination takes its legend, line and points from the line palette',()=>{
- const html=renderWorkspaceTerminal(),marks=[...html.matchAll(/data-color-role="line"[^>]*aria-label="([^"]*)"/g)].map(m=>m[1]);
- assert.equal(marks.filter(label=>label.startsWith('Factory3')).length,8);
- assert.equal(marks.filter(label=>label.startsWith('yield')).length,1);
- assert.equal(marks.length,9);
 });
 
 test('the P&L switch turns the curve, area and daily figure to falling',()=>{
@@ -73,17 +66,3 @@ test('the stock card draws one candle per volume bar with matching directions',(
  assert.doesNotMatch(html,/data-workspace-green="stock"/);
 });
 
-test('the Terminal yield bars and bonds card follow the same changes as web',()=>{
- const html=renderWorkspaceTerminal(),bars=[...html.matchAll(/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"[^>]*data-workspace-bar="yield:(\d+)"/g)].map(m=>Number(m[4]));
- assert.equal(bars.length,14);
- for(let i=0;i<bars.length;i+=2)assert.ok(bars[i]>bars[i+1]);
- assert.equal((html.match(/data-workspace-trace="bonds:/g)||[]).length,1);
- assert.equal((html.match(/data-workspace-area-trace="bonds:0"/g)||[]).length,1);
-});
-
-test('the Terminal bonds curve climbs too and stays inside its grid',()=>{
- const html=renderWorkspaceTerminal(),d=html.match(/<path d="([^"]+)"[^>]*data-workspace-trace="bonds:0"/)[1];
- const ys=d.slice(1).split('L').map(p=>Number(p.split(' ')[1]));
- assert.ok(Math.min(...ys)>=800&&Math.max(...ys)<=917);
- assert.ok(ys[0]-ys.at(-1)>60);
-});
