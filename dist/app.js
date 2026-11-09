@@ -19,7 +19,7 @@ import { financialChartModules, financialModulesFor } from './data/financial-sha
 
 import { defaultFinancialBoard, validateFinancialBoard, renderFinancialExtras } from './scenes/financial-extras.js';
 
-const VERSION = '0.24.2';
+const VERSION = '0.25.0';
 const STORAGE_KEY = 'ainvest-palette-lab:v1';
 const scenes = [
   { id: 'aime', name: 'Aime 对话', en: 'Aime conversation', icon: 'chat' },
@@ -61,7 +61,7 @@ const paths = {
 };
 const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.grid}</svg>`;
 const esc = text => String(text ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-let state = { baseline: clone(presets[0]), draft: clone(presets[0]), scene: 'financial', theme: 'light', role: 'categorical', selected: 0, panel: 'palette', editorOpen: false, chartStyleOpen: false, editorModel: 'oklch', collapsed: innerWidth < 650, previewFullscreen: new URLSearchParams(location.search).get('preview') === 'fullscreen', saved: [], presetEdits: {}, lockedPalettes: [], hiddenPalettes: [], pnlTrend: 'up', globalChartStyle: normalizeGlobalChartStyle(), checkSettings: defaultCheckSettings(), financialBoard: defaultFinancialBoard(), financialDensity: 'compact', customTemplate:'all', comparisonBoards:{}, customBoard: defaultCompactBoard(), aimeBoard: defaultAimeBoard() };
+let state = { baseline: clone(presets[0]), draft: clone(presets[0]), scene: 'financial', theme: 'light', role: 'categorical', selected: 0, panel: 'palette', editorOpen: false, chartStyleOpen: false, editorModel: 'oklch', collapsed: innerWidth < 650, previewFullscreen: new URLSearchParams(location.search).get('preview') === 'fullscreen', saved: [], presetEdits: {}, lockedPalettes: [], hiddenPalettes: [], pnlTrend: 'up', grayscale: false, globalChartStyle: normalizeGlobalChartStyle(), checkSettings: defaultCheckSettings(), financialBoard: defaultFinancialBoard(), financialDensity: 'compact', customTemplate:'all', comparisonBoards:{}, customBoard: defaultCompactBoard(), aimeBoard: defaultAimeBoard() };
 let storageAvailable = true, loaded = false;
 function restoreStoredPresetEdits(input) {
   const edits = restorePresetEdits(input, presets.map(p => p.id));
@@ -318,6 +318,8 @@ function repaintCompactBoard() {
 }
 let history = [], future = [], pendingImport = null, importedIndex = 0, editorTransaction = null, toastTimer, deletedScheme = null;
 const app = document.querySelector('#app'), modal = document.querySelector('#modal');
+// Relative luminance in linear RGB, matching the 「去色」 vision mode in the color checks.
+document.body.insertAdjacentHTML('beforeend', '<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><filter id="palette-lab-gray" color-interpolation-filters="linearRGB"><feColorMatrix type="matrix" values=".2126 .7152 .0722 0 0 .2126 .7152 .0722 0 0 .2126 .7152 .0722 0 0 0 0 0 1 0"/></filter></svg>');
 // These scenes carry large reference data, so they load when opened instead of with every page.
 const lazyScenes = {
   terminal: { load: () => import('./scenes/terminal.js'), module: null, pending: null, failed: false },
@@ -483,13 +485,13 @@ function render() {
       ${readOnly && !live.ready ? `<div class="live-viewer-notice"><p>${esc(live.error || '正在载入共享方案…')}</p>${live.error?'<button class="button" data-action="live-reload">重试</button>':''}</div>` : ''}
       ${mobileAime && !state.collapsed ? '<button class="aime-workbench-backdrop" data-action="collapse" aria-label="关闭颜色工作台"></button>' : ''}
       <section class="preview-workspace" aria-label="场景预览工作区">
-        <div class="preview-canvas ${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? 'has-scene' : ''}" id="preview-canvas" role="region" aria-label="${scene.name}${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? '，图表预览' : '，内容待添加'}" style="--canvas-bg:${palette.themes[state.theme].surface[0].hex}" data-scene="${state.scene}" data-theme="${state.theme}">${state.scene === 'financial' ? renderFinancialScene(renderFinancialExtras(state.financialBoard)) : state.scene === 'custom' ? renderCompactBoard(activeCustomBoard(),state.customTemplate==='free'?{}:{title:comparisonTemplates.find(t=>t.id===state.customTemplate).name,description:`全部 ${compactTypes.length} 种图表 · 每种少量 / 大量数据对比`}) : state.scene === 'aime' ? renderAimeScene(state.aimeBoard,state.theme,{themeSwitch:mobileAime?{disabled:readOnly&&!live.ready,status:readOnly&&live.id?liveDot():'',palettes:readOnly&&live.ready?viewerPaletteBar():''}:null}) : state.scene === 'terminal' ? (lazyScenes.terminal.module?.renderTerminalScene() ?? lazySceneHolder('terminal')) : state.scene === 'workspace' ? (lazyScenes.workspace.module?.renderWorkspaceTerminal({pnlTrend:state.pnlTrend}) ?? lazySceneHolder('workspace')) : ''}</div>
+        <div class="preview-canvas ${state.grayscale ? 'is-grayscale' : ''} ${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? 'has-scene' : ''}" id="preview-canvas" role="region" aria-label="${scene.name}${['financial','custom','aime','terminal','workspace'].includes(state.scene) ? '，图表预览' : '，内容待添加'}" style="--canvas-bg:${palette.themes[state.theme].surface[0].hex}" data-scene="${state.scene}" data-theme="${state.theme}">${state.scene === 'financial' ? renderFinancialScene(renderFinancialExtras(state.financialBoard)) : state.scene === 'custom' ? renderCompactBoard(activeCustomBoard(),state.customTemplate==='free'?{}:{title:comparisonTemplates.find(t=>t.id===state.customTemplate).name,description:`全部 ${compactTypes.length} 种图表 · 每种少量 / 大量数据对比`}) : state.scene === 'aime' ? renderAimeScene(state.aimeBoard,state.theme,{themeSwitch:mobileAime?{disabled:readOnly&&!live.ready,status:readOnly&&live.id?liveDot():'',palettes:readOnly&&live.ready?viewerPaletteBar():''}:null}) : state.scene === 'terminal' ? (lazyScenes.terminal.module?.renderTerminalScene() ?? lazySceneHolder('terminal')) : state.scene === 'workspace' ? (lazyScenes.workspace.module?.renderWorkspaceTerminal({pnlTrend:state.pnlTrend}) ?? lazySceneHolder('workspace')) : ''}</div>
       </section>
       ${isDesktopViewer() ? viewerToolbar() : `<aside class="sidebar" id="color-workbench" aria-label="颜色操作面板" ${readOnly?'inert':''}>
         <div class="sidebar-header">
           <div class="sidebar-title"><div class="workbench-heading"><span>颜色工作台</span><small>Palette Lab <span class="mono">v${VERSION}</span></small></div><div class="workbench-history"><button class="icon-button" data-action="undo" title="撤销（⌘/Ctrl Z）" aria-label="撤销" ${!history.length || isPaletteLocked() ? 'disabled' : ''}>${icon('undo')}</button><button class="icon-button" data-action="redo" title="重做（⌘/Ctrl Shift Z）" aria-label="重做" ${!future.length || isPaletteLocked() ? 'disabled' : ''}>${icon('redo')}</button><button class="icon-button" data-action="collapse" title="收起颜色工作台" aria-label="收起颜色工作台" aria-expanded="true">${icon('panel')}</button></div></div>
           ${mobileEntry ? '' : `<nav class="workbench-scenes" aria-label="产品使用场景">${scenes.map(s => `<button class="scene-tab ${s.id === state.scene ? 'active' : ''}" data-action="scene" data-value="${s.id}" aria-current="${s.id === state.scene ? 'page' : 'false'}">${s.name}</button>`).join('')}</nav>`}
-          <div class="workbench-controls">${themeSegment()}</div>
+          <div class="workbench-controls">${themeSegment()}${grayscaleToggle()}</div>
           <div class="workbench-actions"><button class="button primary" data-action="save" aria-label="另存为新方案">${icon('save')}另存为</button></div>
           <button class="button mobile-share-button" data-action="share-mobile">分享预览</button>
           ${paletteTabs()}
@@ -538,11 +540,13 @@ function viewerChoices() {
   if (ownerTab === 'current') options.push({ ...sharedPalette(), id: 'current', name: paletteLabel(state.draft) });
   return { options, selected };
 }
+// A view switch only: it greys the preview by relative luminance and never changes the palette.
+const grayscaleToggle = () => `<button class="button grayscale-toggle ${state.grayscale ? 'active' : ''}" data-action="grayscale" aria-pressed="${state.grayscale}" title="预览去色，只看明度差异">去色</button>`;
 const themeSegment = () => `<div class="segment" aria-label="预览主题"><button data-action="theme" data-value="light" class="${state.theme === 'light' ? 'active' : ''}" aria-pressed="${state.theme === 'light'}">${icon('sun')}浅色</button><button data-action="theme" data-value="dark" class="${state.theme === 'dark' ? 'active' : ''}" aria-pressed="${state.theme === 'dark'}">${icon('moon')}深色</button></div>`;
 // Computers get the choices a phone has plus the scenes; nothing here edits or saves the shared plan.
 function viewerToolbar() {
   const { options, selected } = viewerChoices();
-  return `<aside class="sidebar viewer-toolbar" id="color-workbench" aria-label="查看工具"><div class="sidebar-header"><div class="sidebar-title"><div class="workbench-heading"><span>查看配色</span><small>只读，你的选择不会影响原方案</small></div><div class="workbench-history"><button class="icon-button" data-action="viewer-collapse" title="收起工具栏" aria-label="收起工具栏" aria-expanded="true">${icon('panel')}</button></div></div><nav class="workbench-scenes" aria-label="产品使用场景">${scenes.map(s => `<button class="scene-tab ${s.id === state.scene ? 'active' : ''}" data-action="viewer-scene" data-value="${s.id}" aria-current="${s.id === state.scene ? 'page' : 'false'}">${s.name}</button>`).join('')}</nav><div class="workbench-controls">${themeSegment()}</div></div><div class="side-scroll"><div class="palette-tab-heading"><span>色板方案</span></div><div class="palette-tabs" role="tablist" aria-label="色板方案">${paletteGroups(options, p => `<div class="palette-tab-item"><button role="tab" data-action="viewer-palette" data-value="${esc(p.id)}" aria-selected="${p.id === selected}" tabindex="${p.id === selected ? 0 : -1}" class="palette-tab ${p.id === selected ? 'active' : ''}" title="${esc(p.name)}">${viewerLockMark(p)}<span>${esc(p.id === 'current' ? p.name : paletteLabel(p))}</span></button></div>`)}</div></div><div class="sidebar-footer"><span class="live-sync-status">${esc(live.status)}</span></div></aside>`;
+  return `<aside class="sidebar viewer-toolbar" id="color-workbench" aria-label="查看工具"><div class="sidebar-header"><div class="sidebar-title"><div class="workbench-heading"><span>查看配色</span><small>只读，你的选择不会影响原方案</small></div><div class="workbench-history"><button class="icon-button" data-action="viewer-collapse" title="收起工具栏" aria-label="收起工具栏" aria-expanded="true">${icon('panel')}</button></div></div><nav class="workbench-scenes" aria-label="产品使用场景">${scenes.map(s => `<button class="scene-tab ${s.id === state.scene ? 'active' : ''}" data-action="viewer-scene" data-value="${s.id}" aria-current="${s.id === state.scene ? 'page' : 'false'}">${s.name}</button>`).join('')}</nav><div class="workbench-controls">${themeSegment()}${grayscaleToggle()}</div></div><div class="side-scroll"><div class="palette-tab-heading"><span>色板方案</span></div><div class="palette-tabs" role="tablist" aria-label="色板方案">${paletteGroups(options, p => `<div class="palette-tab-item"><button role="tab" data-action="viewer-palette" data-value="${esc(p.id)}" aria-selected="${p.id === selected}" tabindex="${p.id === selected ? 0 : -1}" class="palette-tab ${p.id === selected ? 'active' : ''}" title="${esc(p.name)}">${viewerLockMark(p)}<span>${esc(p.id === 'current' ? p.name : paletteLabel(p))}</span></button></div>`)}</div></div><div class="sidebar-footer"><span class="live-sync-status">${esc(live.status)}</span></div></aside>`;
 }
 // Presets on the first row, the user's own schemes on a second one when there are any.
 function viewerPaletteBar() {
@@ -865,6 +869,12 @@ app.addEventListener('click', async e => {
   const liveAction = e.target.closest('[data-action]')?.dataset.action;
   // A preview switch rather than an edit, so viewers can use it too.
   if (liveAction === 'pnl-trend') { state.pnlTrend = e.target.closest('[data-action]').dataset.value === 'down' ? 'down' : 'up'; render(); return; }
+  if (liveAction === 'grayscale') {
+    state.grayscale = !state.grayscale;
+    document.querySelector('#preview-canvas')?.classList.toggle('is-grayscale', state.grayscale);
+    for (const button of document.querySelectorAll('[data-action="grayscale"]')) { button.classList.toggle('active', state.grayscale); button.setAttribute('aria-pressed', state.grayscale); }
+    return;
+  }
   if (liveAction === 'live-reload') { await connectLive(); return; }
   if (liveAction === 'live-copy') { copyLiveSession(); return; }
   if (liveAction === 'theme' && live.role === 'viewer' && live.ready) {
