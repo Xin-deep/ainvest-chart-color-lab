@@ -74,3 +74,11 @@ test('row badges check rise, neutral and fall together as the console lists them
  assert.equal(report.background,p.themes.light.surface[1].hex);
  assert.ok(report.entries.every(entry=>entry.nearest));
 });
+
+test('grayscale vision compares lightness only',async()=>{
+ const {buildPaletteChecks,simulateLinearRgb}=await import('../dist/lib/palette-checks.js');
+ const [r,g,b]=simulateLinearRgb([1,0,0],'gray');assert.equal(r,g);assert.equal(g,b);assert.ok(Math.abs(r-.2126)<1e-9);
+ const report=buildPaletteChecks([{name:'a',hex:'#FF0000'},{name:'b',hex:'#FF0000'}],'#FFFFFF',{vision:'gray'});
+ assert.equal(report.modes.gray.nearest.delta,0);
+ assert.ok(report.modes.gray.samples.every(sample=>/^#(..)\1\1$/.test(sample.hex)));
+});

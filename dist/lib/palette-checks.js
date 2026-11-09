@@ -1,6 +1,6 @@
 import { normalizeColor } from './colors.js';
 import { hexToOklch, checkOklch, linearSrgbToOklab } from './oklch.js';
-export const checkVisionModes={normal:'正常视觉',protan:'红色觉缺陷',deutan:'绿色觉缺陷',tritan:'蓝色觉缺陷'};
+export const checkVisionModes={normal:'正常视觉',protan:'红色觉缺陷',deutan:'绿色觉缺陷',tritan:'蓝色觉缺陷',gray:'去色（只看明度）'};
 // Machado, Oliveira & Fernandes (2009), severity 1.0, applied in linear sRGB.
 // https://doi.org/10.1109/TVCG.2009.113 ; blue-cone simulation is an approximation.
 const checkCvdMatrices={
@@ -25,6 +25,8 @@ export function normalizeCheckSettings(input={}){
  return settings;
 }
 export function simulateLinearRgb(rgb,vision='normal'){
+ // Greyscale keeps only relative luminance, the same weights the preview's 去色 filter uses.
+ if(vision==='gray'){const y=checkBound(rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722,0,1);return [y,y,y];}
  const matrix=checkCvdMatrices[vision];return matrix?matrix.map(row=>checkBound(row.reduce((sum,value,index)=>sum+value*rgb[index],0),0,1)):[...rgb];
 }
 export function deltaEOK(labA,labB){return Math.hypot(...labA.map((value,index)=>value-labB[index]))*100;}
