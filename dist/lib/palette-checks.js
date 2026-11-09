@@ -56,8 +56,13 @@ export function buildPaletteChecks(colors,background,settingsInput){
  return {settings,background,entries,modes:modeData,validCount:entries.filter(entry=>entry.state.valid).length,contrastPass:entries.filter(entry=>entry.contrast>=settings.contrastTarget).length,lightnessRange:entries.length?[Math.min(...lightness),Math.max(...lightness)]:null,chromaRange:entries.length?[Math.min(...chroma),Math.max(...chroma)]:null};
 }
 
+const checkBackground=(palette,theme,settings)=>settings.background==='custom'?settings.customBackground:palette.themes[theme].surface[settings.background==='page'?0:1].hex;
 export function buildPaletteCheckReport(palette,theme,role,settingsInput){
  const settings=normalizeCheckSettings(settingsInput);
- const background=settings.background==='custom'?settings.customBackground:palette.themes[theme].surface[settings.background==='page'?0:1].hex;
- return buildPaletteChecks(palette.themes[theme][role],background,settings);
+ return buildPaletteChecks(palette.themes[theme][role],checkBackground(palette,theme,settings),settings);
+}
+// Checks the colors exactly as the console lists them, e.g. rise, neutral and fall together.
+export function buildRowsCheckReport(palette,theme,rows,settingsInput){
+ const settings=normalizeCheckSettings(settingsInput);
+ return buildPaletteChecks(rows.map(([role,index])=>palette.themes[theme][role][index]),checkBackground(palette,theme,settings),settings);
 }

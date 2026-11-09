@@ -65,3 +65,12 @@ test('inline badges share report thresholds, background, vision and contain no g
  }
  assert.ok(!renderColorChecks(p,'light','categorical',defaultCheckSettings()).includes('sRGB'));
 });
+
+test('row badges check rise, neutral and fall together as the console lists them',async()=>{
+ const {buildRowsCheckReport}=await import('../dist/lib/palette-checks.js');
+ const p=structuredClone(presets[0]);
+ const report=buildRowsCheckReport(p,'light',[['semantic',0],['neutral',0],['semantic',1]],{});
+ assert.deepEqual(report.entries.map(entry=>entry.hex),[p.themes.light.semantic[0].hex,p.themes.light.neutral[0].hex,p.themes.light.semantic[1].hex]);
+ assert.equal(report.background,p.themes.light.surface[1].hex);
+ assert.ok(report.entries.every(entry=>entry.nearest));
+});
