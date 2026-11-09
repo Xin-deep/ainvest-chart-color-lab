@@ -1,6 +1,7 @@
 import { normalizeColor, hexToHsv, hsvToHex } from './colors.js';
+import { hexToOklch, oklchToHex } from './oklch.js';
 export const clone = value => JSON.parse(JSON.stringify(value));
-export const roles = { categorical: '分类色', line: '折线色', semantic: '涨跌色', neutral: '中性色', surface: '界面色' };
+export const roles = { categorical: '分类色', line: '折线色', semantic: '涨跌色', neutral: '中性色', heatmap: '热力图', surface: '界面色' };
 // Stored beside semantic because the live database requires exactly two colors there; the console lists it between them.
 export const defaultNeutral = '#F2B852';
 // These roles can be reordered and resized; the others have fixed positions.
@@ -12,6 +13,19 @@ export const surfaces = {
 export const surfaceNames = ['页面背景', '卡片背景', '主要文字', '次要文字', '分隔线', '网格线'];
 // Palettes without their own line colors take the end of the categorical list, last color first.
 const defaultLines = colors => colors.slice(-2).reverse().map((color, i) => ({ id: `line-${i + 1}`, name: `折线 ${String(i + 1).padStart(2, '0')}`, hex: color.hex }));
+// Heatmap shades from strong rise to strong fall; the count and order are fixed like the surface colors.
+export const heatmapNames = ['涨 ≥5%', '涨 2–5%', '涨 0–2%', '平 0%', '跌 0–2%', '跌 2–5%', '跌 ≥5%'];
+// Flat cells use a quiet gray in every palette, since the neutral role is a warm accent color.
+export const heatmapFlat = { light: '#A3A6AD', dark: '#5C5F66' };
+const heatmapDeep = hex => { const { l, c, h } = hexToOklch(hex); return oklchToHex({ l: l * .72, c: c * .9, h }); };
+const heatmapLight = hex => { const { l, c, h } = hexToOklch(hex); return oklchToHex({ l: l + (.86 - l) * .35, c: c * .75, h }); };
+// The original rise and fall colors keep the shades traced from the web Stock Heatmap.
+export function defaultHeatmap(up, down, theme = 'light') {
+  const hexes = normalizeColor(up) === '#009B67' && normalizeColor(down) === '#FF381A'
+    ? [heatmapDeep('#009959'), '#009959', '#2CBD80', heatmapFlat[theme], '#F77C7C', '#F05045', '#981400']
+    : [heatmapDeep(up), normalizeColor(up), heatmapLight(up), heatmapFlat[theme], heatmapLight(down), normalizeColor(down), heatmapDeep(down)];
+  return hexes.map((hex, i) => ({ id: `heatmap-${i + 1}`, name: heatmapNames[i], hex }));
+}
 const neutralColor = hex => [{ id: 'neutral-1', name: '中性', hex }];
 const colorList = (list, names, prefix) => list.map((hex, i) => ({ id: `${prefix}-${i + 1}`, name: names?.[i] || `系列 ${String(i + 1).padStart(2, '0')}`, hex: normalizeColor(hex) }));
 export function createPalette({ id, name, light, dark, names, lines, up = '#009B67', down = '#FF381A', darkUp = up, darkDown = down, source = '自定义色板', availableThemes = ['light', 'dark'] }) {
@@ -22,6 +36,7 @@ export function createPalette({ id, name, light, dark, names, lines, up = '#009B
       line: lines ? colorList(lines, lines.map((_, i) => `折线 ${String(i + 1).padStart(2, '0')}`), 'line') : defaultLines(colorList(theme === 'light' ? (light || dark) : (dark || light), names, 'category')),
       semantic: colorList(theme === 'light' ? [up, down] : [darkUp, darkDown], ['上涨', '下跌'], 'state'),
       neutral: neutralColor(defaultNeutral),
+      heatmap: defaultHeatmap(theme === 'light' ? up : darkUp, theme === 'light' ? down : darkDown, theme),
       surface: colorList(surfaces[theme], surfaceNames, 'surface')
     }]))
   };
@@ -40,6 +55,14 @@ export function validatePalette(input) {
     for (const role of Object.keys(roles)) {
       // Palettes saved before line colors existed get the same default as a new palette.
       if (role === 'neutral') { const stored = input.themes[theme].neutral; output.themes[theme].neutral = neutralColor(stored ? validateColors(stored)[0].hex : defaultNeutral); continue; }
+      // Palettes saved before the heatmap role get shades derived from their own rise and fall colors.
+      if (role === 'heatmap') {
+        // Six-shade palettes from before the flat shade get it inserted in the middle.
+        const stored = input.themes[theme].heatmap, fallback = defaultHeatmap(output.themes[theme].semantic[0].hex, output.themes[theme].semantic[1].hex, theme);
+        const list = Array.isArray(stored) && stored.length === 6 ? [...stored.slice(0, 3), fallback[3], ...stored.slice(3)] : stored;
+        output.themes[theme].heatmap = Array.isArray(list) && list.length === 7 ? validateColors(list).map((c, i) => ({ ...c, id: `heatmap-${i + 1}`, name: heatmapNames[i] })) : fallback;
+        continue;
+      }
       if (role === 'line' && !input.themes[theme].line) { output.themes[theme].line = defaultLines(output.themes[theme].categorical); continue; }
       output.themes[theme][role] = validateColors(input.themes[theme][role]).map((c, i) => ({ ...c, id: `${role}-${i + 1}` }));
       // Palettes reordered before renumbering existed get their default names back in order.

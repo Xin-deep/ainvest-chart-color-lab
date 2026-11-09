@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {renderTerminalScene,terminalPaletteStyle,applyTerminalPalette,terminalStockRows,TERMINAL_SIZE,yieldBars,risingCurve} from '../dist/scenes/terminal.js';
+import {renderTerminalScene,terminalPaletteStyle,applyTerminalPalette,terminalStockRows,TERMINAL_SIZE} from '../dist/scenes/terminal.js';
 import {terminalDarkReference} from '../dist/data/terminal-dark-reference.js';
 import {terminalReference} from '../dist/data/terminal-reference.js';
 import {presets} from '../dist/data/presets.js';
@@ -9,7 +9,7 @@ test('Stocks reference retains all twelve market cards, independent quotes and t
  const html=renderTerminalScene();
  assert.equal((html.match(/data-terminal-chart=/g)||[]).length,12);
  assert.equal((html.match(/data-terminal-stock="/g)||[]).length,12);
- for(const value of ['Market Trackers','Advancers &amp; Decliners','Stock Heatmap','Fear &amp; Greed Index','24h Dominance','24h Crypto Market Cap','Altcoin Season Index','Crypto ETF Fund Flow','Global yield curves','Key interest rates','155.25M','JJdumpling','Daily Position Analysis','Sectors, Industries and Themes'])assert.ok(html.includes(value),value);
+ for(const value of ['Market Trackers','Advancers &amp; Decliners','Stock Heatmap','Fear &amp; Greed Index','24h Dominance','24h Crypto Market Cap','Altcoin Season Index','Crypto ETF Fund Flow','Global yield curves','Key interest rates','JJdumpling','Daily Position Analysis','Sectors, Industries and Themes'])assert.ok(html.includes(value),value);
  assert.match(html,/248\.98/);assert.equal(terminalStockRows[0][2],'362.44');
  assert.equal((html.match(/data-terminal-group="tasks"/g)||[]).length,6);
  assert.equal(TERMINAL_SIZE.sourceWidth,2880);
@@ -49,15 +49,13 @@ test('dark theme uses reference surfaces and identity assets while series follow
  const palette=structuredClone(presets[0]),vars=new Map();
  const marks=Array.from({length:8},(_,i)=>({dataset:{colorRole:'categorical',colorIndex:String(i),terminalSlot:String(i),terminalBase:'#ABCDEF'},style:{}}));
  const asset={dataset:{terminalAsset:'new-chat'},setAttribute(name,value){this[name]=value;}};
- const trace={dataset:{terminalTrace:'bonds:0'},setAttribute(name,value){this[name]=value;}};
- const host={style:{setProperty:(name,value)=>vars.set(name,value)},querySelectorAll:s=>s==='[data-terminal-base]'?marks:s==='[data-terminal-asset]'?[asset]:s==='[data-terminal-trace]'?[trace]:[],querySelector:()=>null};
+ const host={style:{setProperty:(name,value)=>vars.set(name,value)},querySelectorAll:s=>s==='[data-terminal-base]'?marks:s==='[data-terminal-asset]'?[asset]:[],querySelector:()=>null};
  for(const theme of ['light','dark']){
   palette.themes[theme].categorical.forEach((c,i)=>c.hex=['#112233','#223344','#334455','#445566','#556677','#667788','#778899'][i]);
   applyTerminalPalette(host,palette,theme);
   marks.forEach((m,i)=>assert.equal(m.style.color,palette.themes[theme].categorical[i%7].hex));
   const reference=theme==='dark'?terminalDarkReference:terminalReference;
   assert.equal(asset.href,reference.assets['new-chat']);
-  assert.equal(trace.d,'M'+risingCurve(reference.lines.bonds[0].points,222,154).map(p=>p.join(' ')).join('L'));
  }
  palette.themes.dark.categorical.push({name:'Series 8',hex:'#8899AA'});
  applyTerminalPalette(host,palette,'dark');assert.equal(marks[7].style.color,'#8899AA');assert.equal(marks[7].dataset.colorIndex,'7');
@@ -66,16 +64,8 @@ test('dark theme uses reference surfaces and identity assets while series follow
  assert.notEqual(terminalReference.assets['new-chat'],terminalDarkReference.assets['new-chat']);
  const html=renderTerminalScene();
  for(const id of ['major-bonds-trend','crypto-market-cap','crypto-etf-flow','global-yield-curves','key-interest-rates'])assert.ok(html.includes('data-terminal-chart="'+id+'"'),id);
- // Line points and their legend dots must address the same palette slots.
- assert.match(html,/data-color-index="2"[^>]+data-terminal-base="[^"]+"[^>]+aria-label="rates 3/);
- assert.equal(html.match(/data-color-role="line" data-color-index="0"[^>]+data-terminal-base="#E57E17"/g).length,7);
-});
-
-test('the crypto ETF donut shows seven slices and seven legend items',()=>{
- const html=renderTerminalScene(),card=html.slice(html.indexOf('Crypto ETF Fund Flow'));
- const slices=card.match(/<path d="[^"]*"[^>]*stroke-width="\.6" data-terminal-area\/>/g);
- assert.equal(slices.length,7);
- assert.doesNotMatch(card.slice(0,card.indexOf('155.25M')),/Factory8/);
+ // Those cards keep their frames; the charts inside are Vis Lab components mounted into slots.
+ assert.deepEqual([...html.matchAll(/data-chart-id="([^"]+)"/g)].map(m=>m[1]),['web-bonds','web-dominance','web-cap','web-etf','web-yield','web-rates']);
 });
 
 test('every preset uses the original interface colors outside Aime until they are edited',()=>{
@@ -83,45 +73,6 @@ test('every preset uses the original interface colors outside Aime until they ar
  const claude=structuredClone(presets.find(p=>p.id==='claude'));
  claude.themes.light.surface[0].hex='#EEDDCC';
  assert.equal(terminalPaletteStyle(claude,'light')['--term-page'],'#EEDDCC');
-});
-
-test('only the yield combination uses the line palette, in its legend, line and points',()=>{
- const html=renderTerminalScene(),marks=[...html.matchAll(/data-color-role="line"[^>]*aria-label="([^"]*)"/g)].map(m=>m[1]);
- assert.equal(marks.filter(label=>label.startsWith('Factory3')).length,6);
- assert.equal(marks.filter(label=>label.startsWith('yield')).length,1);
- assert.equal(marks.length,7);
-});
-
-test('every yield period has two whole bars with the first series taller',()=>{
- const bars=yieldBars(terminalReference.bars.yield);
- assert.equal(bars.length,10);
- for(let i=0;i<bars.length;i+=2){
-  assert.equal(bars[i].base,'#1F5FD6');assert.equal(bars[i+1].base,'#168CB8');
-  assert.ok(bars[i].height>bars[i+1].height);
-  assert.ok(Math.abs(bars[i].y+bars[i].height-(bars[i+1].y+bars[i+1].height))<.01);
- }
-});
-test('the bonds card is one line with an area that follows the theme curve',()=>{
- const html=renderTerminalScene(),card=html.slice(html.indexOf('Major 10-year bonds'),html.indexOf('data-terminal-chart="crypto-market-cap"'));
- assert.equal((card.match(/data-terminal-trace="bonds:/g)||[]).length,1);
- assert.equal((card.match(/data-terminal-area-trace="bonds:0"/g)||[]).length,1);
- assert.doesNotMatch(card,/Factory2/);
- const area={dataset:{terminalAreaTrace:'bonds:0',terminalBaseline:'232'},setAttribute(name,value){this[name]=value;}};
- applyTerminalPalette({style:{setProperty(){}},querySelector:()=>null,querySelectorAll:s=>s==='[data-terminal-area-trace]'?[area]:[]},presets[0],'dark');
- const points=risingCurve(terminalDarkReference.lines.bonds[0].points,222,154);
- assert.ok(area.d.startsWith('M'+points[0].join(' ')));assert.ok(area.d.endsWith('L'+points[0][0]+' 232Z'));
-});
-
-test('the bonds curve climbs clearly and stays inside its grid in both themes',()=>{
- for(const reference of [terminalReference,terminalDarkReference]){
-  const points=risingCurve(reference.lines.bonds[0].points,222,154),ys=points.map(p=>p[1]),third=Math.floor(ys.length/3);
-  const mean=list=>list.reduce((sum,v)=>sum+v,0)/list.length;
-  assert.ok(Math.min(...ys)>=144&&Math.max(...ys)<=232);
-  // SVG y grows downward, so a larger value sits higher up on the page.
-  assert.ok(mean(ys.slice(0,third))-mean(ys.slice(-third))>30);
-  assert.ok(ys[0]-ys.at(-1)>50);
-  assert.deepEqual(points.map(p=>p[0]),reference.lines.bonds[0].points.map(p=>p[0]));
- }
 });
 
 test('the fear and greed gauge is computed from fall, neutral and rise colors',()=>{

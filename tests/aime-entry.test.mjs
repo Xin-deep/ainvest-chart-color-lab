@@ -30,5 +30,5 @@ test('aime.html can paint its skeleton before scripts and styles finish', () => 
 test('the offline preview inlines lazy scenes instead of importing files', () => {
   const preview = read('preview.html');
   assert.doesNotMatch(preview, /import\('\.\/scenes\//);
-  assert.match(preview, /Promise\.resolve\(\{ renderTerminalScene, applyTerminalPalette \}\)/);
+  assert.match(preview, /Promise\.resolve\(\{ renderTerminalScene, applyTerminalPalette, terminalChartSlots \}\)/);
 });

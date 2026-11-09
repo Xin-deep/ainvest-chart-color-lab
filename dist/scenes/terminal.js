@@ -2,6 +2,7 @@ import { terminalDarkReference } from '../data/terminal-dark-reference.js';
 import { terminalReference } from '../data/terminal-reference.js';
 import { presets } from '../data/presets.js';
 import { rampColor } from '../lib/oklch.js';
+import { sceneChartLayer, sceneChartSlots, sceneModule } from '../data/scene-charts.js';
 
 export const TERMINAL_SIZE = {width:1856,height:1335,sourceWidth:2880,sourceHeight:2073};
 const termE = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -13,13 +14,6 @@ const termMark=(role,index,base,label,content)=>`<g class="terminal-color-mark" 
 const termCat=(index,base,label,content)=>termMark('categorical',index,base,label,content);
 const termValue=(x,y,value,size=12,anchor)=>termMark('semantic',value.startsWith('-')?1:0,value.startsWith('-')?'#FF381A':'#00B58C',value,termText(x,y,value,size,{fill:'currentColor',anchor}));
 const termCard=(id,x,y,w,h,title,body)=>`<g data-terminal-chart="${id}" role="group" aria-label="${termE(title)}">${termRect(x,y,w,h,'var(--term-bg)',5,'stroke="var(--term-border)"')}${termText(x+8,y+20,title,12.5,{bold:true})}${body}</g>`;
-const termGrid=(x,y,w,h,ticks,options={})=>ticks.map((label,i)=>{const py=y+i*h/(ticks.length-1);return termLine(x,py,x+w,py)+termText(x+w+5,py+4,label,11.5,{fill:options.muted?'var(--term-muted)':'var(--term-text)'});}).join('');
-const termDates=(xs,y,labels)=>xs.map((x,i)=>termText(x,y,labels[i],11.5,{anchor:'middle'})).join('');
-const termSeriesColors=['#1F5FD6','#D9720B','#C14696','#0E9C84','#7647C8','#BB8D13','#8AA126','#168CB8'];
-const termSeriesSlots=[0,1,2,3,4,5,6,7];
-function termLegend(x,y,items,spacing=72,size=12){
- return items.map((item,i)=>{const name=typeof item==='string'?item:item.name,index=typeof item==='string'?i:item.index,base=typeof item==='string'?termSeriesColors[i]:item.base;return termMark(item.role||'categorical',termSeriesSlots[index]??index,base,name,`<circle cx="${x+i*spacing}" cy="${y-4}" r="4.6" fill="currentColor"/>`)+termText(x+9+i*spacing,y,name,size);}).join('');
-}
 function termButton(x,y,w,h,label,{active=false,black=false,control='',group='',action=''}={}){
  return `<g class="terminal-button ${active?'is-active':''} ${black?'terminal-button-black':''}" ${control?`data-terminal-control="${termE(control)}" data-terminal-group="${termE(group)}" tabindex="0" role="button" aria-pressed="${active}" aria-label="${termE(label)}"`:''} ${action?`data-action="${termE(action)}" data-value="${termE(control)}"`:''}>${termRect(x,y,w,h,'var(--term-soft)',3,'class="terminal-button-bg"')}${termText(x+w/2,y+h/2+4,label,12,{anchor:'middle'})}</g>`;
 }
@@ -77,42 +71,15 @@ function termHeatmap(){
  [885,114,100,35,'#981400','Lidar sensor','-13.88%'],[985,114,100,35,'#F05045','Hydrogen','-3.76%'],[1085,114,99,35,'#F05045','Innovative Material','-2.39%'],
  [885,149,75,36,'#009959','India Tech','+2.65%'],[960,149,75,36,'#F05045','Argentina','-2.39%'],[1035,149,75,36,'#2CBD80','Fiber optics','+1.23%'],[1110,149,74,36,'#009959','Cyber Security','+4.31%'],
  [885,185,75,36,'#009959','Catalite Communication','+4.31%'],[960,185,75,36,'#009959','India','+4.31%'],[1035,185,75,36,'#F05045','Infrastructure','-2.16%'],[1110,185,74,36,'#F05045','Coffee','-2.02%'],
- [885,221,75,31,'#009959','Alzheimer','+4.31%'],[960,221,75,31,'#F77C7C','Infrastructure','-1.81%'],[1035,221,75,31,'#009959','Turkish','+4.31%'],[1110,221,74,31,'#009959','Digital Payment','+4.31%']];
- const body=cells.map(([x,y,w,h,base,name,value])=>termMark('semantic',value.startsWith('-')?1:0,base,`${name} ${value}`,termRect(x,y,w,h,'currentColor',0,'stroke="var(--term-bg)" stroke-width=".6" data-terminal-area')+termText(x+w/2,y+13,name,name.length>20?6.3:name.length>13?8:11,{fill:'#fff',anchor:'middle'})+termText(x+w/2,y+27,value,11,{fill:'#fff',anchor:'middle'}))).join('');
+ [885,221,75,31,'#009959','Alzheimer','+4.31%'],[960,221,75,31,'#F77C7C','Infrastructure','-1.81%'],[1035,221,75,31,'#A3A6AD','Turkish','0.00%'],[1110,221,74,31,'#009959','Digital Payment','+4.31%']];
+ // Each cell takes the 「热力图」 shade for its change: 涨 ≥5%, 2–5%, 0–2%, 平 0%, then 跌 0–2%, 2–5%, ≥5%.
+ const shade=value=>{const v=parseFloat(value),size=Math.abs(v),step=size>=5?0:size>=2?1:2;return v===0?3:v<0?6-step:step;};
+ const body=cells.map(([x,y,w,h,base,name,value])=>termMark('heatmap',shade(value),base,`${name} ${value}`,termRect(x,y,w,h,'currentColor',0,'stroke="var(--term-bg)" stroke-width=".6" data-terminal-area')+termText(x+w/2,y+13,name,name.length>20?6.3:name.length>13?8:11,{fill:'#fff',anchor:'middle'})+termText(x+w/2,y+27,value,11,{fill:'#fff',anchor:'middle'}))).join('');
  return termCard('stock-heatmap',878,83,314,176,'Stock Heatmap ›',body);
 }
-// The line of a bar and line combination takes the line palette, like the shared charts.
-const termComboLine=(base,label,content)=>termMark('line',0,base,label,content);
-function termTraceSet(id){
- return terminalReference.lines[id].map(({base,points},i)=>(id==='yield'?termComboLine:termCat.bind(null,i))(base,`${id} ${i+1}`,`<path d="M${points.map(p=>p.join(' ')).join('L')}" fill="none" stroke="currentColor" stroke-width="1.25" data-terminal-trace="${id}:${i}" data-terminal-line data-terminal-width="1.25"/>`)).join('');
-}
-// The traced yield bars come in fragments; each period is rebuilt as two whole bars with the first series taller.
-export function yieldBars(bars){
- const groups=[];
- for(const bar of [...bars].sort((a,b)=>a.x-b.x)){const last=groups.at(-1);if(last&&bar.x-last[0].x<30)last.push(bar);else groups.push([bar]);}
- return groups.flatMap(group=>{
-  const whole=['#1F5FD6','#168CB8'].map(base=>{const parts=group.filter(bar=>bar.base===base);return {base,x:Math.min(...parts.map(p=>p.x)),width:Math.max(...parts.map(p=>p.width)),top:Math.min(...parts.map(p=>p.y)),bottom:Math.max(...parts.map(p=>p.y+p.height))};});
-  const bottom=Math.max(whole[0].bottom,whole[1].bottom),heights=whole.map(bar=>bottom-bar.top).sort((a,b)=>b-a);
-  return whole.map((bar,i)=>({base:bar.base,x:bar.x,width:bar.width,y:bottom-heights[i],height:heights[i]}));
- });
-}
-function termBarSet(id){
- return (id==='yield'?yieldBars(terminalReference.bars.yield):terminalReference.bars[id]).map(({base,x,y,width,height})=>{const index=termSeriesColors.indexOf(base),slot=base==='#168CB8'?1:termSeriesSlots[index];return termCat(slot,base,`${id} bar`,termRect(x,y,width,height,'currentColor',0,'data-terminal-area'));}).join('');
-}
-// Keeps the traced short-term wiggles but replaces the flat overall level with a clear climb.
-export function risingCurve(points,start,end){
- const first=points[0][0],span=points.at(-1)[0]-first;
- return points.map(([x,y],i)=>{
-  const near=points.slice(Math.max(0,i-12),i+13),level=near.reduce((sum,p)=>sum+p[1],0)/near.length;
-  return [x,Number((start+(end-start)*((x-first)/span)**1.3+(y-level)*1.4).toFixed(3))];
- });
-}
-const termBondsPoints=points=>risingCurve(points,222,154);
 function termBondsPlot(){
- const line=terminalReference.lines.bonds[0],points=termBondsPoints(line.points),path='M'+points.map(p=>p.join(' ')).join('L');
- const series=termCat(0,line.base,'Factory1',`<defs><linearGradient id="terminal-bonds-gradient" x1="0" y1="0" x2="0" y2="1"><stop stop-color="currentColor" stop-opacity=".22"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs><path d="${path}L${points.at(-1)[0]} 232L${points[0][0]} 232Z" fill="url(#terminal-bonds-gradient)" data-terminal-area data-terminal-area-trace="bonds:0" data-terminal-baseline="232"/><path d="${path}" fill="none" stroke="currentColor" stroke-width="1.25" data-terminal-trace="bonds:0" data-terminal-line data-terminal-width="1.25"/>`);
- const body=termLegend(1211,126,['Factory1'],71)+termGrid(1206,144,264,88,['100%','80%','60%','40%','20%','0%'])+series+termDates([1223,1281,1340,1399,1458],250,['24.Aug','25.Aug','26.Aug','27.Aug','28.Aug']);
- return termCard('major-bonds-trend',1198,83,314,176,'Major 10-year bonds ›',body);
+ // The plot is a Vis Lab line chart mounted over this card (scene-charts.js).
+ return termCard('major-bonds-trend',1198,83,314,176,'Major 10-year bonds ›','');
 }
 function termArc(cx,cy,outer,inner,start,end){
  const point=(r,a)=>[cx+r*Math.cos(a),cy+r*Math.sin(a)],a=point(outer,start),b=point(outer,end),c=point(inner,end),d=point(inner,start),large=end-start>Math.PI?1:0;
@@ -131,28 +98,21 @@ function termFear(){
 function termDominance(){
  let body='';
  [['Bitcoin','60.14%','-0.01%','#FFAA00',0],['Ethereum','10.59%','-0.05%','#165DFF',1],['BNB','3.63%','-0.08%','#38D1FF',2],['USDT','6.82%','+0.66%','#733ED6',3],['Others','18.82%','+0.02%','#858585',4]].forEach(([label,value,change,base,index],i)=>{const y=310+i*28;body+=termCat(index,base,label,`<circle cx="567" cy="${y-4}" r="3.7" fill="currentColor"/>`)+termText(575,y,label,11.5)+termText(817,y,value,12,{anchor:'end'})+termValue(863,y,change,12,'end');if(i<4)body+=termLine(567,y+9,862,y+9);});
- body+=termGrid(566,450,266,139,['100%','80%','60%','40%','20%','0%'])+termBarSet('dominance')+termDates([586,640,694,748,802],606,['24.Aug','25.Aug','26.Aug','27.Aug','28.Aug']);
  return termCard('crypto-dominance',558,266,314,350,'24h Dominance',body);
 }
 function termMarketCap(){
- const body=termLegend(891,310,['Factory1','Factory2','Factory3','Factory4'],71)+termGrid(885,327,262,167,['2.85T','2.80T','2.75T','2.70T','2.65T','2.65T','2.60T'])+termBarSet('cap')+termDates([910,963,1017,1070,1123],511,['25.Aug','26.Aug','27.Aug','28.Aug','29.Aug']);
  const season=termCat(1,'#FFAA00','Bitcoin',termRect(885,587,146,4,'currentColor')+termText(885,606,'Bitcoin',12,{fill:'currentColor'}))+termCat(0,'#265FFC','Altcoin',termRect(1031,587,149,4,'currentColor')+termText(1180,606,'Altcoin',12,{fill:'currentColor',anchor:'end'}))+termText(1033,576,'43',12,{anchor:'middle'})+`<path d="m1026 578 7 6 7-6Z" fill="var(--term-text)"/>`;
- return termCard('crypto-market-cap',878,266,310,255,'24h Crypto Market Cap',body)+termCard('altcoin-season',878,528,310,88,'Altcoin Season Index',season);
+ return termCard('crypto-market-cap',878,266,310,255,'24h Crypto Market Cap','')+termCard('altcoin-season',878,528,310,88,'Altcoin Season Index',season);
 }
 function termEtfFlow(){
  let body='';
  ['All','BTC','ETH','XRP','SOL'].forEach((name,i)=>body+=termButton(1202+i*61,297,56,23,name,{active:!i,control:name,group:'etf-asset'}));
  ['1M','3M','1Y','YTD','3Y'].forEach((name,i)=>body+=termButton(1202+i*60.5,328,60,22,name,{active:!i,control:name,group:'etf-period'}));
- body+=termRect(1202,328,301,22,'none',3,'stroke="var(--term-border)"')+termLegend(1207,370,['Factory1','Factory2','Factory3','Factory4'],70,11.5)+termLegend(1207,388,[{name:'Factory5',index:4,base:termSeriesColors[4]},{name:'legend',index:5,base:termSeriesColors[5]},{name:'legend',index:6,base:termSeriesColors[6]}],70,11.5);
- // The slices are shares of the ring, so they still close after dropping to seven items.
- const colors=['#4C7BFF','#FF8759','#EF60AB','#57D4C0','#A783EF','#E5B045','#ABC53B'],amounts=[25,17.3,15.3,8.8,12,8.6,7.5],total=amounts.reduce((sum,value)=>sum+value);let angle=-Math.PI/2;
- amounts.forEach((value,i)=>{const end=angle+value/total*Math.PI*2;body+=termCat(termSeriesSlots[i],colors[i],`Factory${i+1}`,`<path d="${termArc(1351,500,77,47,angle,end)}" fill="currentColor" stroke="var(--term-bg)" stroke-width=".6" data-terminal-area/>`);angle=end;});
- body+=termText(1351,495,'Total',12,{fill:'var(--term-muted)',anchor:'middle'})+termText(1351,515,'155.25M',16,{bold:true,anchor:'middle'});
+ body+=termRect(1202,328,301,22,'none',3,'stroke="var(--term-border)"');
  return termCard('crypto-etf-flow',1194,266,318,350,'Crypto ETF Fund Flow',body);
 }
 function termYield(){
- const body=termLegend(251,665,['Factory1','Factory2',{name:'Factory3',index:0,role:'line',base:'#E57E17'}],71)+termGrid(246,683,272,117,['6.0%','5.5%','5.0%','4.5%','4.0%','3.5%','3.0%','2.5%'])+termBarSet('yield')+termTraceSet('yield')+[ [285,760],[336,724],[386,793],[438,726],[489,688] ].map(([x,y])=>termComboLine('#E57E17','Factory3',`<circle cx="${x}" cy="${y}" r="3.8" fill="currentColor"/>`)).join('')+termDates([272,325,377,430,483],817,['1M','3M','6M','1Y','2Y']);
- return termCard('global-yield-curves',238,623,321,205,'Global yield curves',body);
+ return termCard('global-yield-curves',238,623,321,205,'Global yield curves','');
 }
 function termBondsTable(){
  let body='';
@@ -161,10 +121,7 @@ function termBondsTable(){
  return termCard('major-bonds-table',566,623,306,205,'Major 10-year bonds ›',body);
 }
 function termInterestRates(){
- let body='';
- [['USA',0,'#265FFC',887],['United Kingdom',1,'#38D1FF',942],['Germany',2,'#F564B9',1063],['France',3,'#733ED6',1145],['Italy',4,'#00CCC3',1214]].forEach(([name,index,base,x])=>{body+=termCat(index,base,name,`<rect x="${x}" y="655" width="11" height="11" rx="1" fill="currentColor"/><path d="m${x+2} 660 2 2 5-5" stroke="#fff" stroke-width="1.1" fill="none"/>`)+termText(x+17,665,name,12);});
- body+=termGrid(891,683,596,117,['6','5','4','3','2','1','0'])+termTraceSet('rates')+termDates([893,973,1053,1133,1213,1293,1373,1453],817,['1M','3M','6M','1Y','2Y','3Y','5Y','7Y']);
- return termCard('key-interest-rates',878,623,634,205,'Key interest rates ›',body);
+ return termCard('key-interest-rates',878,623,634,205,'Key interest rates ›','');
 }
 export const terminalStockRows=[
  ['TSLA','Tesla','362.44','-1.29%','26.48M','0.67%','1.43T','335.59','1.08','0.00%','Auto Manufacturers',false],
@@ -207,7 +164,7 @@ function termContent(){
  return tabs+termMarketTrackers()+termAdvancers()+termHeatmap()+termBondsPlot()+termFear()+termDominance()+termMarketCap()+termEtfFlow()+termYield()+termBondsTable()+termInterestRates()+termStockTable();
 }
 export function renderTerminalScene(){
- return `<div class="terminal-scene" role="group" aria-label="Terminal · Stocks，按 Stocks.png 还原"><svg class="terminal-shell" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1856 1335" aria-label="Terminal 顶部导航、工具导航与 Watchlist">${termHeader()}</svg><main class="terminal-content-frame" tabindex="0" aria-label="Terminal Stocks 内容区"><svg class="terminal-content" xmlns="http://www.w3.org/2000/svg" viewBox="222 42 1306 1293" aria-label="Stocks 市场数据与股票列表"><defs><pattern id="terminal-texture" patternUnits="userSpaceOnUse" width="8" height="8"><path d="M-2 2 2-2M0 8 8 0M6 10 10 6" stroke="#fff" stroke-width="1" opacity=".65"/></pattern></defs>${termContent()}</svg></main><svg class="terminal-userbar" xmlns="http://www.w3.org/2000/svg" viewBox="0 1229 222 106" aria-label="Rewards 与账户">${termUserBar()}</svg></div>`;
+ return `<div class="terminal-scene" role="group" aria-label="Terminal · Stocks，按 Stocks.png 还原"><svg class="terminal-shell" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1856 1335" aria-label="Terminal 顶部导航、工具导航与 Watchlist">${termHeader()}</svg><main class="terminal-content-frame" tabindex="0" aria-label="Terminal Stocks 内容区"><svg class="terminal-content" xmlns="http://www.w3.org/2000/svg" viewBox="222 42 1306 1293" aria-label="Stocks 市场数据与股票列表"><defs><pattern id="terminal-texture" patternUnits="userSpaceOnUse" width="8" height="8"><path d="M-2 2 2-2M0 8 8 0M6 10 10 6" stroke="#fff" stroke-width="1" opacity=".65"/></pattern></defs>${termContent()}</svg>${sceneChartLayer('terminal')}</main><svg class="terminal-userbar" xmlns="http://www.w3.org/2000/svg" viewBox="0 1229 222 106" aria-label="Rewards 与账户">${termUserBar()}</svg></div>`;
 }
 export function terminalPaletteStyle(palette,theme){
  const colors=palette.themes[theme],original=presets[0].themes[theme],dark=theme==='dark';
@@ -220,16 +177,6 @@ export function applyTerminalPalette(element,palette,theme,globalStyle={}){
  for(const [name,value] of Object.entries(terminalPaletteStyle(palette,theme))){element.style.setProperty(name,value);page?.style.setProperty(name,value);}
  const original=presets[0].themes[theme],colors=palette.themes[theme],reference=theme==='dark'?terminalDarkReference:terminalReference;
  for(const asset of element.querySelectorAll('[data-terminal-asset]'))asset.setAttribute('href',reference.assets[asset.dataset.terminalAsset]);
- for(const trace of element.querySelectorAll('[data-terminal-trace]')){
-  const [id,index]=trace.dataset.terminalTrace.split(':');
-  const geometry=id==='yield'?terminalReference:reference;
-  const points=geometry.lines[id][index].points;
-  trace.setAttribute('d','M'+(id==='bonds'?termBondsPoints(points):points).map(p=>p.join(' ')).join('L'));
- }
- for(const area of element.querySelectorAll('[data-terminal-area-trace]')){
-  const [id,index]=area.dataset.terminalAreaTrace.split(':'),points=termBondsPoints(reference.lines[id][index].points),base=area.dataset.terminalBaseline;
-  area.setAttribute('d','M'+points.map(p=>p.join(' ')).join('L')+`L${points.at(-1)[0]} ${base}L${points[0][0]} ${base}Z`);
- }
  for(const mark of element.querySelectorAll('[data-terminal-base]')){
   const role=mark.dataset.colorRole,slot=Number(mark.dataset.terminalSlot??mark.dataset.colorIndex),index=slot%colors[role].length,color=colors[role][index];
   mark.dataset.colorIndex=String(index);
@@ -265,3 +212,6 @@ export function applyTerminalPalette(element,palette,theme,globalStyle={}){
 }
 
 export {termText,termLine,termRect,termIcon,termArc,termMark,termButton};
+
+// Modules for the Vis Lab charts laid over the cards; app.js mounts them after rendering.
+export const terminalChartSlots = () => sceneChartSlots.terminal.map(sceneModule);
