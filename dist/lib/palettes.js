@@ -42,6 +42,8 @@ export function validatePalette(input) {
       if (role === 'neutral') { const stored = input.themes[theme].neutral; output.themes[theme].neutral = neutralColor(stored ? validateColors(stored)[0].hex : defaultNeutral); continue; }
       if (role === 'line' && !input.themes[theme].line) { output.themes[theme].line = defaultLines(output.themes[theme].categorical); continue; }
       output.themes[theme][role] = validateColors(input.themes[theme][role]).map((c, i) => ({ ...c, id: `${role}-${i + 1}` }));
+      // Palettes reordered before renumbering existed get their default names back in order.
+      if (seriesRoles.includes(role)) renumberSeriesNames(output.themes[theme][role]);
     }
     if (output.themes[theme].surface.length !== 6) throw new Error('界面色需要包含 6 个颜色');
     if (output.themes[theme].semantic.length !== 2) throw new Error('涨跌色需要包含 2 个颜色');
@@ -118,14 +120,22 @@ export function orderSavedPalettes(saved, ids) {
 }
 // A position is one series in both themes, so structure edits apply to light and dark together.
 const seriesLists = (palette, role) => ['light', 'dark'].map(theme => palette.themes[theme][role]);
+// Default names such as 「系列 03」 follow the position, so they are renumbered after any structure change.
+// Names the user typed are kept as they are.
+const autoName = /^(系列|折线) ?\d+$/;
+export function renumberSeriesNames(list) {
+  list.forEach((color, i) => { if (autoName.test(color.name)) color.name = color.name.replace(/ ?\d+$/, ` ${String(i + 1).padStart(2, '0')}`); });
+  return list;
+}
 export function moveSeriesColor(palette, from, to, role = 'categorical') {
-  for (const list of seriesLists(palette, role)) if (from < list.length && to < list.length) list.splice(to, 0, list.splice(from, 1)[0]);
+  for (const list of seriesLists(palette, role)) if (from < list.length && to < list.length) { list.splice(to, 0, list.splice(from, 1)[0]); renumberSeriesNames(list); }
 }
 export function removeSeriesColor(palette, index, role = 'categorical') {
-  for (const list of seriesLists(palette, role)) if (list.length > 1 && index < list.length) list.splice(index, 1);
+  for (const list of seriesLists(palette, role)) if (list.length > 1 && index < list.length) { list.splice(index, 1); renumberSeriesNames(list); }
 }
 export function addSeriesColor(palette, role = 'categorical') {
   const lists = seriesLists(palette, role), label = role === 'line' ? '折线' : '系列';
+  for (const list of lists) renumberSeriesNames(list);
   const taken = new Set(lists.flat().map(color => color.name));
   let number = Math.max(...lists.map(list => list.length)) + 1;
   while (taken.has(`${label} ${String(number).padStart(2, '0')}`)) number++;

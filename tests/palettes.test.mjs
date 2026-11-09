@@ -285,3 +285,16 @@ test('restoring a backup prefers its copies and keeps what only this browser has
   assert.deepEqual(merged.lockedPalettes, ['local', 'cloud']);
   assert.deepEqual(merged.hiddenPalettes, ['both', 'claude']);
 });
+
+test('default series names follow the position after moving, removing and loading; typed names stay',async()=>{
+ const {createPalette,moveSeriesColor,removeSeriesColor,validatePalette}=await import('../dist/lib/palettes.js');
+ const p=createPalette({id:'t',name:'t',light:['#111111','#222222','#333333','#444444']});
+ p.themes.light.categorical[1].name='主蓝';p.themes.dark.categorical[1].name='主蓝';
+ moveSeriesColor(p,0,3);
+ assert.deepEqual(p.themes.light.categorical.map(c=>[c.name,c.hex]),[['主蓝','#222222'],['系列 02','#333333'],['系列 03','#444444'],['系列 04','#111111']]);
+ assert.deepEqual(p.themes.dark.categorical.map(c=>c.name),['主蓝','系列 02','系列 03','系列 04']);
+ removeSeriesColor(p,1);
+ assert.deepEqual(p.themes.light.categorical.map(c=>c.name),['主蓝','系列 02','系列 03']);
+ const stored=structuredClone(p);stored.themes.light.categorical.reverse();
+ assert.deepEqual(validatePalette(stored).themes.light.categorical.map(c=>c.name),['系列 01','系列 02','主蓝']);
+});
