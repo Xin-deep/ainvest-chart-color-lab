@@ -1,3 +1,7 @@
+## 0.26.1 · 2026-11-10
+
+- 修复：电脑上把分享链接 `aime.html?live=…` 改成 `aime.html?edit=…` 后只能看不能改。现在会直接打开完整的编辑页，并按编辑链接找回色板；手机打开仍然只读。
+
 ## 0.26.0 · 2026-11-09
 
 - web 和 Terminal 里有对应组件的图表都换成 Vis Lab 组件，和财报分析、Aime 用同一套：web 的 Major 10-year bonds、24h Dominance、24h Crypto Market Cap、Crypto ETF Fund Flow、Global yield curves、Key interest rates；Terminal 的两个 ETF Holding Distribution（环状图、折柱图）、Quick Quote 的分组柱、多折线和面积图、Calendar 的百分比堆叠柱。卡片标题和按钮不变，图表随页面一起缩放，悬停提示和双击改色照常可用。

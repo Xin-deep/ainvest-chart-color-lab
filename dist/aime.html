@@ -33,6 +33,9 @@
       // Runs before anything else paints: match the theme and fetch the sync SDK alongside the app.
       (function () {
         var params = new URLSearchParams(location.search), shared = params.has('live') || params.has('edit'), theme = params.get('theme');
+        // A share link turned into ?edit= opens the full editor on a computer; phones stay read-only here (same test as isPhone in app.js).
+        var phone = matchMedia('(hover: none) and (pointer: coarse)').matches && Math.min(screen.width, screen.height) <= 650;
+        if (params.has('edit') && !phone) { location.replace('./index.html' + location.search + location.hash); return; }
         try {
           theme = localStorage.getItem('ainvest-live-viewer-theme:v1') || theme || (!shared && JSON.parse(localStorage.getItem('ainvest-palette-lab:v1') || '{}').theme);
         } catch (error) { /* Storage can be blocked; the light skeleton still works. */ }
