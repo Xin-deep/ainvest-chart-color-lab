@@ -29,7 +29,7 @@ npm run build:preview  # 改完 dist/ 必须执行，并提交 preview.html
 - **手机端只读且只有 Aime：** 手机打开固定链接或网站、以及不带固定链接的 `aime.html`，都只显示 Aime 对话，只能切换主题和色板，编辑链接也按只读处理。手机按「只支持触摸且短边不超过 650px」判断，电脑窄窗口和平板打开网站仍可编辑。
 - **电脑查看页：** 电脑或平板打开 `aime.html?live=…` 时走 `viewerToolbar()`，可以切换场景、色板和主题，但不能编辑。场景选择只存在查看者本地；固定链接同步各场景的布局（`liveSnapshot`），新增需要同步的状态要同时改 `snapshotLayouts` 和 `sync-server.mjs` 的 `normalizeSnapshot`。
 - **图表打包：** `dist/vendor/vis-lab.bundle.js` 里打包了 `scripts/vis-engine-entry.js` 及其引用的 `dist/data/aime-reference.js`、`dist/data/financial-shared.js`、`dist/data/scene-charts.js`、`dist/lib/palettes.js`。改这些文件后要运行 `npm run build:vis` 再 `build:preview`。测试直接读源文件，漏打包时测试照样通过，页面却还是旧数据。
-- **更新 Vis Lab：** `source/` 保持上游原样，适配写在 `scripts/build-vis.mjs`，补丁没命中时构建会报错。全球热力图的底图和国旗沿用上游的 jsDelivr 固定版本，是唯一需要联网的图表。
+- **更新 Vis Lab：** `source/` 保持上游原样，适配写在 `scripts/build-vis.mjs`，补丁没命中时构建会报错。更新方法：下载上游指定 commit，用它的 `assets`、`charts`、`demos`、`tokens` 整体替换 `source/` 下的同名目录，改 `UPSTREAM.json`，再 `build:vis`。上游新增示例时，自由看板会多一种图：要把类型 id 加进 `scenes/custom.js` 的 `compactTypesAddedIn` 并升级 `catalogVersion`，否则已保存的看板会把它当成被删掉。全球热力图的底图和国旗沿用上游的 jsDelivr 固定版本，是唯一需要联网的图表。
 - **web / Terminal 的组件图：** 位置和数据在 `dist/data/scene-charts.js`，卡片框和按钮仍在场景 SVG 里。图表按页面原始像素排版、整体用 CSS 缩放；`vis-engine-entry.js` 会把这些插槽里的指针和 `getBoundingClientRect` 换回未缩放坐标，悬停才对得上，改插槽结构时别丢了 `scene-chart-slot` 类名。
 - **按需加载：** web 和 Terminal 场景在 `app.js` 里动态导入，不要改回静态导入。新增动态导入时要同步改 `scripts/build-preview.mjs`。
 - **预加载列表：** `aime.html` 列出了首屏模块，增删首屏模块要同步更新，`tests/aime-entry.test.mjs` 会检查。

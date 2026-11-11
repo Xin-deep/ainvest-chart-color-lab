@@ -8,7 +8,9 @@ function newCompactModule(type) {
   const def=compactTypes.find(v=>v.id===type)||compactTypes[0];
   return {id:crypto.randomUUID(),type:def.id,count:def.count,series:def.series,labels:'auto',lineWidth:'auto',texture:'none',hidden:false,height:def.height,span:def.span};
 }
-function defaultCompactBoard(){const modules=compactTypes.map(v=>newCompactModule(v.id));return {catalogVersion:3,density:'compact',columns:3,selected:modules[0].id,modules};}
+// Chart types added after a catalog version; boards saved before it gain them once, later removals stay removed.
+const compactTypesAddedIn={4:['market-cap-rank']};
+function defaultCompactBoard(){const modules=compactTypes.map(v=>newCompactModule(v.id));return {catalogVersion:4,density:'compact',columns:3,selected:modules[0].id,modules};}
 function validateCompactBoard(input){
   if(!input||!Array.isArray(input.modules))return defaultCompactBoard();
   const modules=input.modules.slice(0,60).filter(m=>compactTypes.some(t=>t.id===m.type)).map(m=>{
@@ -16,9 +18,11 @@ function validateCompactBoard(input){
     const migrateDefaults=(Number(input.catalogVersion)||0)<3&&!m.fixtureCustomized&&def.legacyCounts.includes(m.count);
     return {id:typeof m.id==='string'&&/^[\w-]{1,80}$/.test(m.id)?m.id:crypto.randomUUID(),type:def.id,count:Math.max(def.range.min,Math.min(def.range.max,migrateDefaults?def.count:Math.round(Number(m.count)||def.count))),series:def.seriesRange?Math.max(seriesRangeOf(m,def).min,Math.min(def.seriesRange.max,Math.round(Number(m.series)||def.series))):def.series,area:['on','off'].includes(m.area)?m.area:undefined,hidden:m.hidden===true,comparisonVariant:['few','many'].includes(m.comparisonVariant)?m.comparisonVariant:undefined,comparisonLabel:['少量数据','大量数据','结构示例'].includes(m.comparisonLabel)?m.comparisonLabel:undefined,labels:['auto','on','off'].includes(m.labels)?m.labels:'auto',fixtureCustomized:!!m.fixtureCustomized,lineWidth:m.lineWidth!=='auto'&&Number.isFinite(Number(m.lineWidth))?Math.max(.5,Math.min(8,Number(m.lineWidth))):'auto',texture:['none','stripes','cross','dots'].includes(m.texture)?m.texture:'none',height:migrateDefaults&&[220,300].includes(m.height)?'auto':['auto',180,220,300,400].includes(m.height)?m.height:'auto',span:m.span==='full'?'full':'auto'};
   });
-  if((Number(input.catalogVersion)||0)<2)for(const def of compactTypes)if(!modules.some(m=>m.type===def.id))modules.push(newCompactModule(def.id));
+  const version=Number(input.catalogVersion)||0;
+  if(version<2){for(const def of compactTypes)if(!modules.some(m=>m.type===def.id))modules.push(newCompactModule(def.id));}
+  else for(const [at,ids] of Object.entries(compactTypesAddedIn))if(version<Number(at))for(const id of ids)if(compactTypes.some(t=>t.id===id)&&!modules.some(m=>m.type===id))modules.push(newCompactModule(id));
   const selected=modules.find(m=>m.id===input.selected&&!m.hidden)||modules.find(m=>!m.hidden);
-  return {catalogVersion:3,density:input.density==='standard'?'standard':'compact',columns:[1,2,3,4,5].includes(input.columns)?input.columns:3,selected:selected?.id,modules};
+  return {catalogVersion:4,density:input.density==='standard'?'standard':'compact',columns:[1,2,3,4,5].includes(input.columns)?input.columns:3,selected:selected?.id,modules};
 }
 function renderCompactCards(board){return board.modules.filter(m=>!m.hidden).map(m=>{
     const def=compactTypes.find(t=>t.id===m.type);

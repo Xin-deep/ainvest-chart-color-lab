@@ -7,7 +7,9 @@ import { aimeChartConfig } from '../dist/data/aime-reference.js';
 import { sceneChartConfig } from '../dist/data/scene-charts.js';
 import { surfaces } from '../dist/lib/palettes.js';
 import { CHARTS } from '../dist/vendor/vis-lab/source/demos/registry.js';
-import { EXAMPLES, buildConfig, examplesFor, densityOptionsOf, defaultDensityCountOf, densityRangeOf, capabilitiesOf } from '../dist/vendor/vis-lab/source/demos/examples.js';
+import { EXAMPLES, buildConfig, examplesFor, densityOptionsOf, defaultDensityCountOf, capabilitiesOf } from '../dist/vendor/vis-lab/source/demos/examples.js';
+// Upstream stopped exporting this one-liner (c2c22ff); same default range of 1–50 unless the example narrows it.
+const densityRangeOf=example=>({min:1,max:50,...(example?.densityRange??{})});
 import tokensCSS from '../dist/vendor/vis-lab/source/tokens/tokens.css';
 import chartCSS from '../dist/vendor/vis-lab/source/charts/styles.css';
 const css = `${tokensCSS}\n${chartCSS}\n:host{display:block}*{box-sizing:border-box}.chart-host{width:100%;font-family:var(--font-family-cn);color:var(--color-text-primary)}.palette-chart-summary{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;pointer-events:none;line-height:1.45;color:var(--color-text-primary);white-space:nowrap}.palette-chart-summary span{font-size:10px;color:var(--color-text-secondary)}.palette-chart-summary strong{font-size:12px;font-weight:600}svg{flex-shrink:0}.dv-chart__plot{min-width:0}.chart-host.row-fill{flex:1;min-height:0}.chart-host[data-preset="financial-business"].dv-chart--legend-bottom,.chart-host[data-preset="financial-region"].dv-chart--legend-bottom,.chart-host[data-preset="aime-factors"].dv-chart--legend-bottom{flex-direction:column-reverse}.chart-host[data-preset="aime-growth"] .dv-line-point{opacity:0}.chart-host[data-preset="scene-dominance"] .dv-chart__legend{display:none}.chart-host[data-preset="scene-bonds"] .dv-line-point{opacity:0}`;
