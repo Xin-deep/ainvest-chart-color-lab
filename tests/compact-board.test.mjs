@@ -7,21 +7,21 @@ const context={console,URL,setTimeout,clearTimeout};
 runInNewContext(await readFile(new URL('../dist/vendor/vis-lab.bundle.js',import.meta.url),'utf8'),context);
 globalThis.PaletteVisEngine=context.PaletteVisEngine;
 const {compactTypes,defaultCompactBoard,validateCompactBoard,renderCompactBoard}=await import('../dist/scenes/custom.js');
-test('all 26 public upstream examples are available without regression-only examples',()=>{
-  assert.equal(compactTypes.length,26);
+test('all 27 public upstream examples are available without regression-only examples',()=>{
+  assert.equal(compactTypes.length,27);
   assert.deepEqual(Array.from(compactTypes,t=>t.id),examplesFor('index').map(e=>e.id));
-  assert.equal(new Set(defaultCompactBoard().modules.map(m=>m.type)).size,26);
+  assert.equal(new Set(defaultCompactBoard().modules.map(m=>m.type)).size,27);
 });
 test('v0.4.0 six-chart boards gain missing types while preserving module settings',()=>{
   const original={columns:2,selected:'retained',modules:[{id:'retained',type:'basic',count:31,height:400,span:'full',labels:'off'}]};
   const upgraded=validateCompactBoard(original);
-  assert.equal(upgraded.modules.length,26);
+  assert.equal(upgraded.modules.length,27);
   assert.equal(upgraded.selected,'retained');
   assert.equal(upgraded.columns,2);
   assert.equal(upgraded.modules[0].count,31);
   assert.equal(upgraded.modules[0].height,400);
   assert.equal(upgraded.modules[0].labels,'off');
-  assert.equal(validateCompactBoard(upgraded).modules.length,26);
+  assert.equal(validateCompactBoard(upgraded).modules.length,27);
 });
 test('intentional removals survive reload and per-type data limits are respected',()=>{
   const board=defaultCompactBoard();
@@ -30,10 +30,18 @@ test('intentional removals survive reload and per-type data limits are respected
   board.modules.find(m=>m.type==='treemap-overall').count=54;
   board.modules.find(m=>m.type==='treemap-entry').count=40;
   const restored=validateCompactBoard(board);
-  assert.equal(restored.modules.length,25);
+  assert.equal(restored.modules.length,26);
   assert.equal(restored.modules.find(m=>m.type==='radar-basic').count,3);
   assert.equal(restored.modules.find(m=>m.type==='treemap-overall').count,54);
   assert.equal(restored.modules.find(m=>m.type==='treemap-entry').count,8);
+});
+
+test('boards saved before the static ranking chart gain it once, later removals stay removed',()=>{
+  const saved=defaultCompactBoard();saved.catalogVersion=3;saved.modules=saved.modules.filter(m=>m.type!=='market-cap-rank'&&m.type!=='pie');
+  const upgraded=validateCompactBoard(saved);
+  assert.equal(upgraded.catalogVersion,4);assert.ok(upgraded.modules.some(m=>m.type==='market-cap-rank'));assert.ok(!upgraded.modules.some(m=>m.type==='pie'));
+  upgraded.modules=upgraded.modules.filter(m=>m.type!=='market-cap-rank');
+  assert.ok(!validateCompactBoard(upgraded).modules.some(m=>m.type==='market-cap-rank'));
 });
 
 test('default fixtures and heights follow the original Vis Lab examples',()=>{
@@ -44,7 +52,7 @@ test('default fixtures and heights follow the original Vis Lab examples',()=>{
     assert.equal(module.height,'auto');
   }
   assert.equal(board.modules.find(m=>m.type==='line').count,4);
-  assert.match(renderCompactBoard(board),/26\/26/);
+  assert.match(renderCompactBoard(board),/27\/27/);
   const old=validateCompactBoard({catalogVersion:2,columns:3,modules:[{id:'line-old',type:'line',count:22,height:220,labels:'auto'}]});
   assert.equal(old.modules[0].count,4);
   assert.equal(old.modules[0].height,'auto');
@@ -59,7 +67,7 @@ test('chart density defaults to compact and survives experiment restore',()=>{
   assert.equal(validateCompactBoard(board).density,'compact');
 });
 
-test('financial additions start empty and restore independently without filling the 26-chart board',async()=>{
+test('financial additions start empty and restore independently without filling the 27-chart board',async()=>{
   const {defaultFinancialBoard,validateFinancialBoard,renderFinancialExtras}=await import('../dist/scenes/financial-extras.js');
   const {newCompactModule}=await import('../dist/scenes/custom.js');
   const {parseImport}=await import('../dist/lib/palettes.js');
@@ -74,7 +82,7 @@ test('financial additions start empty and restore independently without filling 
   assert.equal(restored.modules.length,1);assert.equal(restored.modules[0].count,12);
   assert.equal(restored.selected,module.id);assert.match(renderFinancialExtras(restored),/基础柱状图/);
   restored.modules=[];assert.equal(validateFinancialBoard(restored).modules.length,0);
-  assert.equal(defaultCompactBoard().modules.length,26);
+  assert.equal(defaultCompactBoard().modules.length,27);
 });
 
 test('module appearance settings survive restore and reject unsupported texture values',()=>{
@@ -102,10 +110,10 @@ test('module order, hiding and five-column layout survive restore',async()=>{
  assert.match(renderCompactCards(restored),new RegExp(`data-module-id="${b.id}"`));
 });
 
-test('only two layout choices expose all 26 sparse/dense chart pairs',async()=>{
+test('only two layout choices expose all 27 sparse/dense chart pairs',async()=>{
  const {createComparisonBoard,validateComparisonBoards,comparisonTemplatePanel}=await import('../dist/scenes/comparison.js');
  const board=createComparisonBoard();
- assert.equal(board.columns,2);assert.equal(board.modules.length,52);
+ assert.equal(board.columns,2);assert.equal(board.modules.length,54);
  for(const def of compactTypes){
    const pair=board.modules.filter(m=>m.type===def.id);assert.equal(pair.length,2);
    const [few,many]=pair;assert.ok(few.count<many.count);assert.equal(few.series,many.series);
@@ -116,10 +124,10 @@ test('only two layout choices expose all 26 sparse/dense chart pairs',async()=>{
  assert.ok(html.includes('对比模板'));assert.ok(html.includes('自由布局'));
  board.columns=5;board.modules[0].hidden=true;
  const saved=validateComparisonBoards(JSON.parse(JSON.stringify({all:board}))).all;
- assert.equal(saved.modules.length,52);assert.equal(saved.columns,5);assert.equal(saved.modules[0].hidden,true);
+ assert.equal(saved.modules.length,54);assert.equal(saved.columns,5);assert.equal(saved.modules[0].hidden,true);
  assert.equal(saved.modules[0].comparisonVariant,'few');
  const migrated=validateComparisonBoards({bars:{modules:[{...board.modules[0],count:7}]}}).all;
- assert.equal(migrated.modules.length,52);assert.equal(migrated.modules[0].count,7);
+ assert.equal(migrated.modules.length,54);assert.equal(migrated.modules[0].count,7);
  assert.deepEqual(validateComparisonBoards(null),{});
 });
 

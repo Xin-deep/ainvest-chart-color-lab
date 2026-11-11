@@ -5,10 +5,10 @@ function createComparisonBoard(){
    const counts=def.chart==='world-heatmap'?[4,12]:def.chart==='radar'?[3,6]:def.chart==='hbar'?[5,12]:def.chart==='pie'?[3,10]:def.chart==='chord'?[4,10]:def.id==='treemap-entry'?[4,8]:def.id==='treemap-overall'?[8,48]:def.chart==='sankey'?[5,15]:def.chart==='waterfall'?[3,12]:[4,24];
    return counts.map((count,index)=>({...newCompactModule(def.id),count:Math.max(def.range.min,Math.min(def.range.max,count)),comparisonLabel:index?'大量数据':'少量数据',comparisonVariant:index?'many':'few',fixtureCustomized:true,span:'auto'}));
  });
- return {catalogVersion:3,columns:2,density:'compact',selected:modules[0]?.id,modules};
+ return {catalogVersion:4,columns:2,density:'compact',selected:modules[0]?.id,modules};
 }
 function validateComparisonBoards(input){
- if(input?.all?.modules)return {all:validateCompactBoard({...input.all,catalogVersion:3})};
+ if(input?.all?.modules)return {all:validateCompactBoard({...input.all,catalogVersion:4})};
  // Merge the previous category templates without losing their adjusted pairs.
  const previous=['bars','stacks','lines','combos','ranking','pies','radars','treemaps','sankey','chord','waterfalls'].flatMap(id=>Array.isArray(input?.[id]?.modules)?input[id].modules:[]);
  if(!previous.length)return {};

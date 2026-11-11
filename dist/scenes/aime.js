@@ -6,11 +6,11 @@ const aimeGlyph=(name)=>{const shapes={menu:'M5 6h14M5 12h10M5 18h6',edit:'m14 4
 function defaultAimeBoard(){
   const defaults=[['aime-growth',36,3],['aime-duration',2,1],['aime-factors',7,1],['aime-stack',5,5],['aime-grouped',5,4]];
   const modules=defaults.map(([fixture,count,series])=>({...newCompactModule(aimeFixtureTypes[fixture]),fixture,count,series,fixtureCustomized:true}));
-  return {catalogVersion:3,platform:'mobile',density:'compact',columns:1,selected:modules[0].id,modules};
+  return {catalogVersion:4,platform:'mobile',density:'compact',columns:1,selected:modules[0].id,modules};
 }
 function validateAimeBoard(input){
   if(!input||!Array.isArray(input.modules))return defaultAimeBoard();
-  const board=validateCompactBoard({...input,catalogVersion:3,columns:1});board.platform='mobile';
+  const board=validateCompactBoard({...input,catalogVersion:4,columns:1});board.platform='mobile';
   for(const m of board.modules){const original=input.modules.find(v=>v.id===m.id);if(['pager','actions'].includes(original?.header))m.header=original.header;if(original&&aimeFixtureTypes[original.fixture]===m.type){m.fixture=original.fixture;if(m.fixture==='aime-duration')m.count=2;if(m.fixture==='aime-growth'&&m.count===12)m.count=36;}}
   return board;
 }
